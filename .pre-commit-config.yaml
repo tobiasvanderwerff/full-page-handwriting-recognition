@@ -1,0 +1,21 @@
+# How to use:
+#
+# Install pre-commit:
+# `$ pip install pre-commit`
+#
+# Install git hook scripts:
+# `$ pre-commit install`
+#
+# Now pre-commit will run automatically on `git commit`.
+
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.0.1  # Use the ref you want to point at
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+-   repo: https://github.com/psf/black
+    rev: 21.7b0
+    hooks:
+    -   id: black
