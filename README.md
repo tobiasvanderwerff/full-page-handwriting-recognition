@@ -1,6 +1,6 @@
 # Full Page Handwriting Recognition
 Implementation of the paper "Full Page Handwriting Recognition via Image to Sequence
-Extraction" by Singh et al. (2021).
+Extraction" by Singh et al. (2021) ([Arxiv link](https://arxiv.org/abs/2103.06450)).
 
 ![model-schematic](img/model-schematic.png)
 
