@@ -39,5 +39,16 @@ this using the `--data_format {form,line,word}` flag.
 For more command line options, see `main.py`, or run `python main.py -h` for a list of
 all options.
 
+## How to view logs
+During training, different metrics are logged to Tensorboard, as well as intermediate
+predictions on a fixed batch of data. These are stored in the `lightning_logs` folder.
+To view the Tensorboard logs, run the following from the root directory:
+
+```shell
+tensorboard --logdir lightning_logs
+```
+
+This will provide a localhost link to the Tensorboard dashboard.
+
 ## TODO
 - Implement synthetic data augmentation, as specified on p.10 of the paper
