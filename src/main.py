@@ -176,14 +176,10 @@ def main(args):
                 test_batch=next(
                     iter(
                         DataLoader(
-                            # Subset(ds_eval, random.sample(range(len(ds_eval)), LOGMODELPREDICTIONS_TO_SAMPLE)),
                             Subset(
                                 ds_eval,
-                                list(
-                                    range(
-                                        len(ds_eval) - LOGMODELPREDICTIONS_TO_SAMPLE,
-                                        len(ds_eval),
-                                    )
+                                random.sample(
+                                    range(len(ds_eval)), LOGMODELPREDICTIONS_TO_SAMPLE
                                 ),
                             ),
                             batch_size=LOGMODELPREDICTIONS_TO_SAMPLE,
@@ -233,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_nodes", type=int, default=1, help="Number of nodes to train on.")
     parser.add_argument("--precision", type=int, default=16, help="How many bits of floating point precision to use.")
     parser.add_argument("--limit_train_batches", type=float, default=1.0)
-    parser.add_argument("--early_stopping_patience", type=int, default=3)
+    parser.add_argument("--early_stopping_patience", type=int, default=5)
     parser.add_argument("--num_sanity_val_steps", type=int, default=2)
     parser.add_argument("--save_all_checkpoints", action="store_true", default=False)
 
