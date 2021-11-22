@@ -20,7 +20,7 @@ pip install -r requirements.txt
 Now run the main script, e.g.
 
 ```shell
-python main.py --data_dir /path/to/IAM --data_format form --max_epochs 3
+python src/main.py --data_dir /path/to/IAM --data_format form --max_epochs 3
 ```
 
 Be sure to run this on a GPU (not tested on CPU).
@@ -38,3 +38,6 @@ this using the `--data_format {form,line,word}` flag.
 
 For more command line options, see `main.py`, or run `python main.py -h` for a list of
 all options.
+
+## TODO
+- Implement synthetic data augmentation, as specified on p.10 of the paper

@@ -430,3 +430,20 @@ class IAMDataset(Dataset):
             if word is not None:
                 return html.unescape(word.get("text"))
         return None
+
+
+class SyntheticDataGenerator:
+    def __init__(self, iam_root):
+        self.ds = IAMDataset(
+            iam_root,
+            "line",
+            "test",
+            use_cache=False,
+            skip_bad_segmentation=False,
+        )
+
+    # TODO: make a synthetic data generator. Some considerations:
+    # 1. At what level to concatentate (e.g. word, line, sentence). What effect will
+    #    this choice have on the language model that is trained?
+    # 2. What heuristics to apply, e.g. minimum line length to avoid lines that are
+    #    only one or a few words.
