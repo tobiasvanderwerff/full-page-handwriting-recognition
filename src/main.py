@@ -65,11 +65,12 @@ def main(args):
     if args.use_aachen_splits:
         # Use the Aachen splits for the IAM dataset. It should be noted that these
         # splits do not encompass the complete IAM dataset.
-        train_splits = Path("Aachen_splits/train.uttlist").read_text().split("\n")
+        aachen_path = Path("../data/aachen_splits/")
+        train_splits = (aachen_path / "train.uttlist").read_text().splitlines()
         validation_splits = (
-            Path("Aachen_splits/validation.uttlist").read_text().split("\n")
+            (aachen_path / "validation.uttlist").read_text().splitlines()
         )
-        test_splits = Path("Aachen_splits/test.uttlist").read_text().split("\n")
+        test_splits = (aachen_path / "test.uttlist").read_text().splitlines()
 
         data_train = ds.data[ds.data["img_id"].isin(train_splits)]
         data_eval = ds.data[ds.data["img_id"].isin(validation_splits)]

@@ -145,7 +145,6 @@ tags
 
 cache
 *.ipynb
-Aachen_splits/
 notes*
 .idea/
 lightning_logs
