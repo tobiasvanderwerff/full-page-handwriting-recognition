@@ -29,10 +29,10 @@ class CharacterErrorRate(Metric):
         def to_str(t: Tensor) -> str:
             return "".join(map(str, t.flatten().tolist()))
 
-        pred_str, tgt_str = map(to_str, (preds, target))
-        editd = editdistance.eval(pred_str, tgt_str)
-
-        self.edits += editd
+        for p, t in zip(preds, target):
+            p_str, t_str = map(to_str, (p, t))
+            editd = editdistance.eval(p_str, t_str)
+            self.edits += editd
         self.total_chars += target.numel()
 
     def compute(self) -> Tensor:

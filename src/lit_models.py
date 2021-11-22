@@ -109,7 +109,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         cer = self.cer_metric(logits[:, :T, :].argmax(-1), targets)
         # wer = self.wer_metric(logits[:, :T, :].argmax(-1), targets)
         self.log("val_loss", loss, sync_dist=True, prog_bar=True)
-        self.log("char_error_rate", cer)
+        self.log("char_error_rate", cer, prog_bar=True)
         # self.log("word_error_rate", wer)
         self.log(
             "hp_metric", cer
