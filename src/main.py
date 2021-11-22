@@ -65,7 +65,7 @@ def main(args):
     if args.use_aachen_splits:
         # Use the Aachen splits for the IAM dataset. It should be noted that these
         # splits do not encompass the complete IAM dataset.
-        aachen_path = Path("../aachen_splits/")
+        aachen_path = Path(__file__).parent.parent / "aachen_splits"
         train_splits = (aachen_path / "train.uttlist").read_text().splitlines()
         validation_splits = (
             (aachen_path / "validation.uttlist").read_text().splitlines()
