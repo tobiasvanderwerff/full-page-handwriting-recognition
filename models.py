@@ -1,26 +1,14 @@
 """
-Symbol table:
-    B: batch size
-    T: target sequence length
-    w: image width
-    h: image height
+Implementation of model specified in "Full Page Handwriting Recognition
+via Image to Sequence Extraction" by Singh et al.
 """
 
 import math
-from typing import List, Callable
-
-from pl_callbacks import ShowPredictions
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 import torchvision
 from torch import Tensor
-import pytorch_lightning as pl
-
-
-# __all__ = [FullPageHTREncoderDecoder, FullPageHTREncoder, FullPageHTRDecoder]
 
 
 class PositionalEmbedding1D(nn.Module):
@@ -30,7 +18,7 @@ class PositionalEmbedding1D(nn.Module):
     Adapted from 'The Annotated Transformer', http://nlp.seas.harvard.edu/2018/04/03/attention.html
     """
 
-    def __init__(self, d_model, max_len=5000):
+    def __init__(self, d_model, max_len=1000):
         super().__init__()
 
         # Compute the positional encodings once in log space.
@@ -53,14 +41,20 @@ class PositionalEmbedding1D(nn.Module):
                 embedding to
         """
         _, T, _ = x.shape
+        # assert T <= self.pe.size(0) \
+        assert T <= self.pe.size(1), (
+            f"Stored 1D positional embedding does not have enough dimensions for the current feature map. "
+            f"Currently max_len={self.pe.size(1)}, T={T}. Consider increasing max_len such that max_len >= T."
+        )
         return x + self.pe[:, :T]
 
 
 class PositionalEmbedding2D(nn.Module):
     """Implements 2D sinusoidal embeddings. See p.7 of Singh et al. for more details."""
 
-    def __init__(self, d_model, max_len=500):
+    def __init__(self, d_model, max_len=100):
         super().__init__()
+
         assert d_model % 4 == 0
 
         # Calculate all positional embeddings once and save them for re-use.
@@ -93,6 +87,11 @@ class PositionalEmbedding2D(nn.Module):
                 embedding to
         """
         _, w, h, _ = x.shape
+        assert w <= self.pe_x.size(0) and h <= self.pe_y.size(0), (
+            f"Stored 2D positional embedding does not have enough dimensions for the current feature map. "
+            f"Currently max_len={self.pe_x.size(0)}, whereas the current feature map is of shape ({w}, {h}). "
+            f"Consider increasing max_len such that max_len >= T."
+        )
 
         pe_x_ = self.pe_x[:w, :].unsqueeze(1).expand(-1, h, -1)  # (w, h, d_model/2)
         pe_y_ = self.pe_y[:h, :].unsqueeze(0).expand(w, -1, -1)  # (w, h, d_model/2)
@@ -108,7 +107,7 @@ class FullPageHTRDecoder(nn.Module):
     pos_emb: PositionalEmbedding1D
     drop: nn.Dropout
 
-    vocab: List[str]
+    vocab_len: int
     max_seq_len: int
     eos_tkn_idx: int
     sos_tkn_idx: int
@@ -122,7 +121,7 @@ class FullPageHTRDecoder(nn.Module):
 
     def __init__(
         self,
-        vocab: List[str],
+        vocab_len: int,
         max_seq_len: int,
         eos_tkn_idx: int,
         sos_tkn_idx: int,
@@ -137,7 +136,7 @@ class FullPageHTRDecoder(nn.Module):
         super().__init__()
         assert d_model % 4 == 0
 
-        self.vocab = vocab
+        self.vocab_len = vocab_len
         self.max_seq_len = max_seq_len
         self.eos_tkn_idx = eos_tkn_idx
         self.sos_tkn_idx = sos_tkn_idx
@@ -149,7 +148,7 @@ class FullPageHTRDecoder(nn.Module):
         self.dropout = dropout
         self.activation = activation
 
-        self.emb = nn.Embedding(len(vocab), d_model)
+        self.emb = nn.Embedding(vocab_len, d_model)
         self.pos_emb = PositionalEmbedding1D(d_model)
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=d_model,
@@ -160,7 +159,7 @@ class FullPageHTRDecoder(nn.Module):
             batch_first=True,
         )
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
-        self.clf = nn.Linear(d_model, len(vocab))
+        self.clf = nn.Linear(d_model, vocab_len)
         self.drop = nn.Dropout(p=dropout)
 
     def forward(self, memory: Tensor):
@@ -179,6 +178,9 @@ class FullPageHTRDecoder(nn.Module):
             _, pred = torch.max(logits, -1)
             all_logits.append(logits)
             sampled_ids.append(pred)
+            # TODO: The if statement below does not work, since .all() most likely never hits. However, it can be
+            #  potentially very beneficial to implement this nonetheless, e.g. by keeping track of whether the
+            #  <EOS> token has been sampled for each sequence in the batch.
             if (pred == self.eos_tkn_idx).all():
                 break
             tgt_ext = self.drop(
@@ -192,7 +194,8 @@ class FullPageHTRDecoder(nn.Module):
         # Replace all sampled_ids tokens after <EOS> with <PAD> tokens.
         eos_idxs = (sampled_ids == self.eos_tkn_idx).float().argmax(1)
         for i in range(B):
-            sampled_ids[i, : eos_idxs[i] + 1] = self.pad_tkn_idx
+            if eos_idxs[i] != 0:  # sampled sequence contains <EOS> token
+                sampled_ids[i, eos_idxs[i] + 1 :] = self.pad_tkn_idx
 
         return all_logits, sampled_ids
 
@@ -257,19 +260,19 @@ class FullPageHTREncoder(nn.Module):
     # dropout=0.5, which makes me think perhaps the dropout rate for the encoder should
     # be higher.
 
-    def __init__(self, d_model, model_name="resnet18", dropout=0.1):
+    def __init__(
+        self, d_model: int, model_name: str = "resnet18", dropout: float = 0.1
+    ):
         super().__init__()
 
         assert d_model % 4 == 0
-        # TODO: figure out what to set max_len to, by looking at the final feature map
-        # dimensions h and w of the resnet encoder. Then max_len is max(h, w).
         _models = ["resnet18", "resnet34", "resnet50"]
         err_message = f"{model_name} is not an available option: {_models}"
         assert model_name in _models, err_message
 
         self.d_model = d_model
         self.model_name = model_name
-        self.pos_emb = PositionalEmbedding2D(d_model, max_len=500)
+        self.pos_emb = PositionalEmbedding2D(d_model)
         self.drop = nn.Dropout(p=dropout)
 
         resnet = getattr(torchvision.models, model_name)(pretrained=False)
@@ -289,30 +292,19 @@ class FullPageHTREncoder(nn.Module):
         self.linear = nn.Conv2d(
             resnet.fc.in_features, d_model, kernel_size=1
         )  # 1x1 convolution
-        # self.bn = nn.BatchNorm2d(d_model)
 
     def forward(self, imgs):
         x = self.encoder(imgs.unsqueeze(1))  # x: (B, d_model, w, h)
         x = self.linear(x).transpose(1, 2).transpose(2, 3)  # x: (B, w, h, d_model)
-        # x = self.bn(x.transpose(2, 3).transpose(1, 2)).transpose(1, 2).transpose(2, 3)  # x: (B, w, h, d_model)
         x = self.pos_emb(x)  # x: (B, w, h, d_model)
         x = self.drop(x)  # x: (B, w, h, d_model)
         x = x.flatten(1, 2)  # x: (B, w*h, d_model)
         return x
 
 
-class FullPageHTREncoderDecoder(pl.LightningModule):
-    """
-    Implementation of model specified in "Full Page Handwriting Recognition
-    via Image to Sequence Extraction" by Singh et al.
-
-    All hyperparameters are based on training details specified in the paper,
-    whenever they were available.
-    """
-
+class FullPageHTREncoderDecoder(nn.Module):
     encoder: FullPageHTREncoder
     decoder: FullPageHTRDecoder
-    loss_fn: Callable
 
     def __init__(self, encoder: FullPageHTREncoder, decoder: FullPageHTRDecoder):
         super().__init__()
@@ -320,43 +312,7 @@ class FullPageHTREncoderDecoder(pl.LightningModule):
 
         self.encoder = encoder
         self.decoder = decoder
-        self.loss_fn = nn.CrossEntropyLoss(ignore_index=decoder.pad_tkn_idx)
 
     def forward(self, imgs: Tensor):
-        logits, sampled_ids = self.decode(self.encode(imgs))
+        logits, sampled_ids = self.decoder(self.encoder(imgs))
         return logits, sampled_ids
-
-    def encode(self, imgs: Tensor):
-        return self.encoder(imgs)
-
-    def decode(self, memory: Tensor):
-        return self.decoder(memory)
-
-    def training_step(self, batch, batch_idx):
-        imgs, targets = batch
-        memory = self.encoder(imgs)
-        logits = self.decoder.decode_teacher_forcing(memory, targets)
-
-        self._logits, self._targets = logits, targets  # for callbacks
-
-        loss = self.loss_fn(logits.transpose(1, 2), targets)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        inputs, targets = batch
-        B, T = targets.shape
-        logits, _ = self.forward(inputs)
-        self._logits, self._targets = logits, targets  # for callbacks
-        if logits.size(1) < targets.size(1):
-            # Pad logits until maximum target length.
-            _, _, n_classes = logits.shape
-            pad = F.one_hot(torch.tensor(self.decoder.pad_tkn_idx), n_classes)
-            pad = pad.expand(B, T - logits.size(1), -1).to(logits.device)
-            logits = torch.cat([logits, pad], 1)
-        loss = self.loss_fn(logits[:, :T, :].transpose(1, 2), targets)
-        return loss
-
-    def configure_optimizers(self):
-        # See Singh et al, page 9.
-        optimizer = optim.AdamW(self.parameters(), lr=0.0002, betas=(0.9, 0.999))
-        return optimizer

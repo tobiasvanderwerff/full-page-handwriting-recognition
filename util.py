@@ -1,8 +1,11 @@
 import xml.etree.ElementTree as ET
 import random
+import math
 from pathlib import Path
-from typing import Union, Tuple, List
+from typing import Union, Tuple
 
+import torch
+import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 
@@ -48,7 +51,19 @@ def randomly_displace_and_pad(
     return res
 
 
-def resize(img: np.ndarray, scale: int, **kwargs) -> np.ndarray:
+def dpi_adjusting(img: np.ndarray, scale: int, **kwargs) -> np.ndarray:
     height, width = img.shape[:2]
-    new_height, new_width = int(height * scale), int(width * scale)
+    new_height, new_width = math.ceil(height * scale), math.ceil(width * scale)
     return cv2.resize(img, (new_width, new_height))
+
+
+def matplotlib_imshow(img: torch.Tensor, one_channel=True):
+    assert img.device.type == "cpu"
+    if one_channel and img.ndim == 3:
+        img = img.mean(dim=0)
+    img = img / 2 + 0.5  # unnormalize
+    npimg = img.numpy()
+    if one_channel:
+        plt.imshow(npimg, cmap="Greys")
+    else:
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
