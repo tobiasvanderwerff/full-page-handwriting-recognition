@@ -219,8 +219,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_layers", type=int, default=6)
     parser.add_argument("--nhead", type=int, default=4)
     parser.add_argument("--dim_feedforward", type=int, default=1024)
-    parser.add_argument("--drop_enc", type=int, default=0.5, help="Encoder dropout.")
-    parser.add_argument("--drop_dec", type=int, default=0.5, help="Decoder dropout.")
+    parser.add_argument("--drop_enc", type=float, default=0.5, help="Encoder dropout.")
+    parser.add_argument("--drop_dec", type=float, default=0.5, help="Decoder dropout.")
 
     # Trainer arguments.
     parser.add_argument("--max_epochs", type=int, default=999)
