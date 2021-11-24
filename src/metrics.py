@@ -10,8 +10,9 @@ class CharacterErrorRate(Metric):
     were incorrectly predicted.
     """
 
-    def __init__(self):
+    def __init__(self, label_encoder: "LabelEncoder"):
         super().__init__()
+        self.label_encoder = label_encoder
         self.add_state("edits", default=Tensor([0]), dist_reduce_fx="sum")
         self.add_state("total_chars", default=Tensor([0]), dist_reduce_fx="sum")
 
@@ -26,11 +27,8 @@ class CharacterErrorRate(Metric):
         """
         assert preds.ndim == target.ndim
 
-        def to_str(t: Tensor) -> str:
-            return "".join(map(str, t.flatten().tolist()))
-
         for p, t in zip(preds, target):
-            p_str, t_str = map(to_str, (p, t))
+            p_str, t_str = map(tensor_to_str, (p, t))
             editd = editdistance.eval(p_str, t_str)
             self.edits += editd
         self.total_chars += target.numel()
@@ -40,14 +38,15 @@ class CharacterErrorRate(Metric):
         return self.edits.float() / self.total_chars
 
 
-# class WordErrorRate(WER):
-#     def __init__(self):
-#         super().__init__()
+class WordErrorRate(WER):
+    def __init__(self):
+        super().__init__()
 
-#     def to_str(self, preds: Tensor, target: Tensor):
-#         def _to_str(t: Tensor) -> str:
-#             return ''.join(map(str, t.flatten().tolist()))
+    def to_str(self, preds: Tensor, target: Tensor):
+        # device = self.preds.device
+        pred_str, tgt_str = map(to_str, (preds, target))
+        return pred_str, tgt_str
 
-#         # device = self.preds.device
-#         pred_str, tgt_str = map(to_str, (preds, target))
-#         return pred_str, tgt_str
+
+def tensor_to_str(t: Tensor) -> str:
+    return "".join(map(str, t.flatten().tolist()))

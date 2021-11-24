@@ -149,6 +149,7 @@ def main(args):
                 "precision": args.precision,
                 "accumulate_grad_batches": args.accumulate_grad_batches,
                 "early_stopping_patience": args.early_stopping_patience,
+                "label_smoothing": args.label_smoothing,
             },
         )
 
@@ -229,6 +230,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--num_nodes", type=int, default=1, help="Number of nodes to train on.")
     parser.add_argument("--precision", type=int, default=16, help="How many bits of floating point precision to use.")
+    parser.add_argument("--label_smoothing", type=float, default=0.0,
+                        help="Label smoothing epsilon (0.0 indicates no smoothing)")
     parser.add_argument("--limit_train_batches", type=float, default=1.0)
     parser.add_argument("--early_stopping_patience", type=int, default=5)
     parser.add_argument("--num_sanity_val_steps", type=int, default=2)

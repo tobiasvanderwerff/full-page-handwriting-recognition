@@ -1,7 +1,7 @@
 from typing import Callable, Optional, Dict, Union, Any
 
 from models import FullPageHTREncoder, FullPageHTRDecoder
-from metrics import CharacterErrorRate
+from metrics import CharacterErrorRate, WordErrorRate
 
 import torch
 import torch.nn as nn
@@ -15,7 +15,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
     encoder: FullPageHTREncoder
     decoder: FullPageHTRDecoder
     cer_metric: CharacterErrorRate
-    # wer_metric: WordErrorRate
+    wer_metric: WordErrorRate
     loss_fn: Callable
 
     def __init__(
@@ -74,7 +74,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
 
         # Initialize metrics and loss function.
         self.cer_metric = CharacterErrorRate()
-        # self.wer_metric = WordErrorRate()
+        self.wer_metric = WordErrorRate()
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=self.decoder.pad_tkn_idx)
 
     def forward(self, imgs: Tensor):
@@ -97,23 +97,19 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
 
         logits, _ = self(imgs)
         _, preds = logits.max(-1)
-        # self.last_preds = preds.detach()  # for callbacks
-        if logits.size(1) < targets.size(1):
-            # Pad logits until maximum target length.
-            _, _, n_classes = logits.shape
-            pad = F.one_hot(torch.tensor(self.decoder.pad_tkn_idx), n_classes)
-            pad = pad.expand(B, T - logits.size(1), -1).to(self.device)
-            logits = torch.cat([logits, pad], 1)
 
-        loss = self.loss_fn(logits[:, :T, :].transpose(1, 2), targets)
-        cer = self.cer_metric(logits[:, :T, :].argmax(-1), targets)
-        # wer = self.wer_metric(logits[:, :T, :].argmax(-1), targets)
-        self.log("val_loss", loss, sync_dist=True, prog_bar=True)
+        # Log metrics and loss.
+        cer = self.cer_metric(preds, targets)
+        wer = self.wer_metric(preds, targets)
+        loss = self.loss_fn(
+            logits[:, :T, :].transpose(1, 2), targets[:, : logits.size(1)]
+        )
         self.log("char_error_rate", cer, prog_bar=True)
-        # self.log("word_error_rate", wer)
+        self.log("word_error_rate", wer)
+        self.log("val_loss", loss, sync_dist=True, prog_bar=True)
         self.log(
             "hp_metric", cer
-        )  # this will show up in the Tensorboard hparams tab, to compare different models
+        )  # this will show up in the Tensorboard hparams tab, for comparing different models
 
         return loss
 
