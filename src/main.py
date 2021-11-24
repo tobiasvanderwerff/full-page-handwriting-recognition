@@ -127,6 +127,7 @@ def main(args):
         )
     else:
         model = LitFullPageHTREncoderDecoder(
+            label_encoder=ds.label_enc,
             encoder_name=args.encoder,
             vocab_len=len(ds.vocab),
             d_model=args.d_model,
