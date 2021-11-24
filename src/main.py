@@ -120,6 +120,7 @@ def main(args):
         # are derived from the saved label encoder associated with the checkpoint.
         model = LitFullPageHTREncoderDecoder.load_from_checkpoint(
             args.validate,
+            label_encoder=ds.label_enc,
             vocab_len=len(ds.vocab),
             eos_tkn_idx=eos_tkn_idx,
             sos_tkn_idx=sos_tkn_idx,

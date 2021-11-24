@@ -2,10 +2,8 @@ from typing import Callable, Optional, Dict, Union, Any
 
 from models import FullPageHTREncoder, FullPageHTRDecoder
 
-# from metrics import CharacterErrorRate, WordErrorRate
-from metrics import CharacterErrorRate
+from metrics import CharacterErrorRate, WordErrorRate
 
-import torch
 import torch.nn as nn
 import torch.optim as optim
 import pytorch_lightning as pl
@@ -17,7 +15,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
     encoder: FullPageHTREncoder
     decoder: FullPageHTRDecoder
     cer_metric: CharacterErrorRate
-    # wer_metric: WordErrorRate
+    wer_metric: WordErrorRate
     loss_fn: Callable
 
     def __init__(
@@ -77,7 +75,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
 
         # Initialize metrics and loss function.
         self.cer_metric = CharacterErrorRate(label_encoder)
-        # self.wer_metric = WordErrorRate()
+        self.wer_metric = WordErrorRate(label_encoder)
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=self.decoder.pad_tkn_idx)
 
     def forward(self, imgs: Tensor):
@@ -101,17 +99,17 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
 
         # Calculate metrics and loss.
         cer = self.cer_metric(preds, targets)
-        # wer = self.wer_metric(preds, targets)
+        wer = self.wer_metric(preds, targets)
         loss = self.loss_fn(
             logits[:, : targets.size(1), :].transpose(1, 2),
             targets[:, : logits.size(1)],
         )
         # Log metrics and loss.
         self.log("char_error_rate", cer, prog_bar=True)
-        # self.log("word_error_rate", wer)
+        self.log("word_error_rate", wer)
         self.log("val_loss", loss, sync_dist=True, prog_bar=True)
         self.log(
-            "hp_metric", cer
+            "hp_metric", wer
         )  # this will show up in the Tensorboard hparams tab, used for comparing different models
 
         return loss
