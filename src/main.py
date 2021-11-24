@@ -172,7 +172,7 @@ def main(args):
                 save_top_k=(-1 if args.save_all_checkpoints else 3),
                 mode="min",
                 monitor="char_error_rate",
-                filename="{epoch}-{char_error_rate:.4f}",
+                filename="{epoch}-{char_error_rate:.4f}-{word_error_rate:.4f}",
             ),
             LogModelPredictions(
                 ds.label_enc,
