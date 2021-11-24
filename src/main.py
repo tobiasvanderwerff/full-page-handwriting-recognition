@@ -190,6 +190,7 @@ def main(args):
                         )
                     )
                 ),
+                include_train=True,
             ),
             EarlyStopping(
                 monitor="char_error_rate",

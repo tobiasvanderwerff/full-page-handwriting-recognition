@@ -13,29 +13,33 @@ from sklearn.preprocessing import LabelEncoder
 
 class LogModelPredictions(Callback):
     """
-    Use a fixed test batch to monitor model predictions at the end of every val epoch.
+    Use a fixed test batch to monitor model predictions at the end of every epoch.
 
     Specifically: it generates matplotlib Figure using a trained network, along with images
-    and labels from a batch, that shows the network's prediction
-    alongside the actual target.
+    and labels from a batch, that shows the network's prediction alongside the actual target.
     """
 
     def __init__(
         self,
         label_encoder: "LabelEncoder",
         test_batch: Tuple[torch.Tensor, torch.Tensor],
+        include_train: bool = False,
     ):
         self.label_encoder = label_encoder
         self.imgs, self.targets = test_batch
+        self.include_train = include_train
 
     def on_validation_epoch_end(self, trainer, pl_module: "LightningModule"):
-        # """
-        # IMPORTANT: because we are using fixed indices to obtain the data each bach, the validation data should
-        # not be shuffled per batch.
-        # """
-        # preds, targets, imgs = pl_module.last_preds, pl_module.last_targets, pl_module.last_imgs
-        # preds, targets, imgs = preds[-self.to_sample:], targets[-self.to_sample:], imgs[-self.to_sample:].cpu()
+        self.predict_intermediate(trainer, pl_module, split="val")
 
+    def on_train_epoch_end(self, trainer, pl_module: "LightningModule"):
+        if self.include_train:
+            self.predict_intermediate(trainer, pl_module, split="train")
+
+    def predict_intermediate(self, trainer, pl_module: "LightningModule", split="val"):
+        """Make predictions on a fixed batch of data and log the results to Tensorboard."""
+
+        # Make predictions.
         imgs, targets = self.imgs, self.targets
         with torch.no_grad():
             pl_module.eval()  # TODO: check to what value this should be set afterwards
@@ -43,16 +47,7 @@ class LogModelPredictions(Callback):
                 imgs.cuda()
             )  # not ideal to call .cuda(), but I'm assuming I'm always using a GPU
 
-        # try:
-        #     preds = pl_module.last_preds
-        #     preds = preds[-self.to_sample:]
-        # except AttributeError as err:
-        #     m = """Please track the last_preds in the validation_step like so:
-        #                 def validation_step(...):
-        #                     self.last_preds = your_preds
-        #             """
-        #     raise AttributeError(m) from err
-
+        # Find padding and <EOS> positions in predictions and targets.
         eos_idxs_pred = (
             (preds == pl_module.decoder.eos_tkn_idx).float().argmax(1).tolist()
         )
@@ -60,6 +55,7 @@ class LogModelPredictions(Callback):
             (targets == pl_module.decoder.eos_tkn_idx).float().argmax(1).tolist()
         )
 
+        # Decode predictions and generate a plot.
         fig = plt.figure(figsize=(12, 16))
         for i, (p, t) in enumerate(zip(preds.tolist(), targets.tolist())):
             # Decode predictions and targets.
@@ -85,5 +81,8 @@ class LogModelPredictions(Callback):
             matplotlib_imshow(imgs[i])
             ax.set_title(f"Pred: {pred_str}\nTarget: {target_str}")
 
+        # Log the results to Tensorboard.
         tensorboard = trainer.logger.experiment
-        tensorboard.add_figure("predictions vs targets", fig, trainer.global_step)
+        tensorboard.add_figure(
+            f"{split}: predictions vs targets", fig, trainer.global_step
+        )
