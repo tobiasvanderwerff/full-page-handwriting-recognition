@@ -3,6 +3,7 @@
 import xml.etree.ElementTree as ET
 import html
 import pickle
+import random
 from math import ceil
 from functools import partial
 from dataclasses import dataclass, field
@@ -158,6 +159,7 @@ class IAMDataset(Dataset):
         split: str,
         use_cache: bool = False,
         skip_bad_segmentation: bool = False,
+        return_writer_id: bool = False,
         label_enc: Optional[LabelEncoder] = None,
     ):
         super().__init__()
@@ -173,6 +175,7 @@ class IAMDataset(Dataset):
 
         self._parse_method = parse_method
         self._split = split
+        self._return_writer_id = return_writer_id
         self.root = Path(root)
         self.label_enc = label_enc
 
@@ -220,6 +223,8 @@ class IAMDataset(Dataset):
             print(type(img), data["img_path"])
         if self.transforms is not None:
             img = self.transforms(image=img)["image"]
+        if self._return_writer_id:
+            return img, data["writer_id"], data["target_enc"]
         return img, data["target_enc"]
 
     @property
@@ -231,8 +236,12 @@ class IAMDataset(Dataset):
         batch: Sequence[Tuple[np.ndarray, np.ndarray]],
         pad_val: int,
         eos_tkn_idx: int,
+        dataset_returns_writer_id: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        imgs, targets = zip(*batch)
+        if dataset_returns_writer_id:
+            imgs, writer_ids, targets = zip(*batch)
+        else:
+            imgs, targets = zip(*batch)
 
         img_sizes = [im.shape for im in imgs]
         if (
@@ -252,6 +261,8 @@ class IAMDataset(Dataset):
             targets_padded[i, seq_lengths[i]] = eos_tkn_idx
 
         imgs, targets_padded = torch.tensor(imgs), torch.tensor(targets_padded)
+        if dataset_returns_writer_id:
+            return imgs, targets_padded, torch.tensor(writer_ids)
         return imgs, targets_padded
 
     def set_transforms_for_split(self, split: str):
@@ -384,21 +395,21 @@ class IAMDataset(Dataset):
             List of 2-tuples, where each tuple contains the path to a word image
             along with its ground truth text.
         """
-        data = {"img_path": [], "img_id": [], "target": []}
+        data = {"img_path": [], "img_id": [], "writer_id": [], "target": []}
         root = self.root / "words"
         for d1 in root.iterdir():
             for d2 in d1.iterdir():
                 doc_id = d2.name
                 xml_root = read_xml(self.root / "xml" / (doc_id + ".xml"))
+                writer_id = int(xml_root.get("writer-id"))
                 for img_path in d2.iterdir():
-                    # _, _, line_n, word_n = img_path.stem.split('-')
-                    # id_ = '-'.join([doc_id, line_n, word_n])
                     target = self._find_word(
                         xml_root, img_path.stem, skip_bad_segmentation
                     )
                     if target is not None:
                         data["img_path"].append(str(img_path.resolve()))
                         data["img_id"].append(doc_id)
+                        data["writer_id"].append(writer_id)
                         data["target"].append(target)
         return pd.DataFrame(data)
 
@@ -433,17 +444,78 @@ class IAMDataset(Dataset):
 
 
 class SyntheticDataGenerator:
-    def __init__(self, iam_root):
-        self.ds = IAMDataset(
-            iam_root,
-            "line",
-            "test",
-            use_cache=False,
-            skip_bad_segmentation=False,
-        )
-
     # TODO: make a synthetic data generator. Some considerations:
     # 1. At what level to concatentate (e.g. word, line, sentence). What effect will
     #    this choice have on the language model that is trained?
     # 2. What heuristics to apply, e.g. minimum line length to avoid lines that are
     #    only one or a few words.
+
+    def __init__(
+        self, iam_root: str, max_line_width: int = 500, space_between_words: int = 20
+    ):
+        self.max_line_width = max_line_width
+        self.space_between_words = space_between_words
+        # self.images = IAMDataset(
+        #     iam_root,
+        #     "word",
+        #     "test",
+        #     use_cache=False,
+        #     skip_bad_segmentation=True,
+        # )
+
+    def sample_image(self) -> Tuple[np.ndarray, str]:
+        idx = random.randint(0, len(self.images))
+        img, target = self.images[idx]
+        target = "".join(self.images.label_enc.inverse_transform(target))
+        return img, target
+
+    def generate_line(self):
+        curr_pos = 0
+        imgs, targets, img_stack = [], [], []
+
+        # Sample images.
+        while curr_pos < self.max_line_width:
+            # With 25% probability, pop an image from the stack (a closing quote).
+            if len(img_stack) != 0 and (not random.randint(0, 3)):
+                img, tgt = img_stack.pop()
+            else:  # sample a random image
+                img, tgt = self.sample_image()
+            h, w = img.shape
+
+            if curr_pos + w > self.max_line_width:
+                if img_stack != []:
+                    pass
+                    # for img, tgt in img_stack:
+                    # TODO
+                    #
+                    # Empty the stack
+                break
+
+            # When sampling quotes, close them at a random point.
+            if tgt in ['"', "'"]:
+                img_stack.append((img, tgt))
+
+            imgs.append(img)
+            targets.append(tgt)
+            curr_pos += w + self.space_between_words
+
+        # Concatenate the images into a line.
+        max_h = max(im.shape[0] for im in imgs)
+        line = np.ones((max_h, self.max_line_width))
+        curr_pos = 0
+        for img, tgt in zip(imgs, targets):
+            h, w = img.shape
+            start_h = int((max_h - h) / 2)
+
+            # If sampled a comma or dot, place them at the bottom of the line
+            if tgt in [",", "."]:
+                start_h = max_h - h
+            # If sampled a quote, place them at the top of the line
+            if tgt in ['"', "'"]:
+                start_h = 0
+
+            # Concatenate the sampled word image to the line.
+            line[start_h : start_h + h, curr_pos : curr_pos + w] = img
+
+            curr_pos += w + self.space_between_words
+        return line, " ".join(targets)
