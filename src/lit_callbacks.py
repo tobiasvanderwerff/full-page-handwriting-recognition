@@ -46,10 +46,9 @@ class LogModelPredictions(Callback):
             imgs, targets = self.train_batch
         else:  # split == "val"
             imgs, targets = self.val_batch
-        imgs = imgs.cuda() if self.use_gpu else imgs
         with torch.no_grad():
             pl_module.eval()  # TODO: check to what value this should be set afterwards
-            _, preds = pl_module(imgs)
+            _, preds = pl_module(imgs.cuda() if self.use_gpu else imgs)
 
         # Find padding and <EOS> positions in predictions and targets.
         eos_idxs_pred = (
