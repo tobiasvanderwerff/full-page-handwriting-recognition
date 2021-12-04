@@ -30,7 +30,7 @@ def main(args):
     seed_everything(args.seed)
 
     log_dir_root = Path(__file__).parent.parent.resolve()
-    tb_logger = pl_loggers.TensorBoardLogger(log_dir_root/LOGGING_DIR, name="")
+    tb_logger = pl_loggers.TensorBoardLogger(log_dir_root / LOGGING_DIR, name="")
 
     label_enc = None
     if args.validate:
@@ -178,7 +178,7 @@ def main(args):
             ),
             LogModelPredictions(
                 ds.label_enc,
-                test_batch=next(
+                val_batch=next(
                     iter(
                         DataLoader(
                             Subset(
@@ -195,8 +195,24 @@ def main(args):
                         )
                     )
                 ),
+                train_batch=next(
+                    iter(
+                        DataLoader(
+                            Subset(
+                                ds_train,
+                                random.sample(
+                                    range(len(ds_train)), LOGMODELPREDICTIONS_TO_SAMPLE
+                                ),
+                            ),
+                            batch_size=LOGMODELPREDICTIONS_TO_SAMPLE,
+                            shuffle=False,
+                            collate_fn=collate_fn,
+                            num_workers=args.num_workers,
+                            pin_memory=True,
+                        )
+                    )
+                ),
                 use_gpu=(False if args.use_cpu else True),
-                include_train=True,
             ),
             EarlyStopping(
                 monitor="char_error_rate",

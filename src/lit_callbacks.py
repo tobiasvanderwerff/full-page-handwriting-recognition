@@ -1,5 +1,5 @@
 import math
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 
@@ -22,30 +22,34 @@ class LogModelPredictions(Callback):
     def __init__(
         self,
         label_encoder: "LabelEncoder",
-        test_batch: Tuple[torch.Tensor, torch.Tensor],
-        include_train: bool = False,
+        val_batch: Tuple[torch.Tensor, torch.Tensor],
+        use_gpu: bool = True,
+        train_batch: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
     ):
         self.label_encoder = label_encoder
-        self.imgs, self.targets = test_batch
-        self.include_train = include_train
+        self.val_batch = val_batch
+        self.use_gpu = use_gpu
+        self.train_batch = train_batch
 
     def on_validation_epoch_end(self, trainer, pl_module: "LightningModule"):
-        self.predict_intermediate(trainer, pl_module, split="val")
+        self._predict_intermediate(trainer, pl_module, split="val")
 
     def on_train_epoch_end(self, trainer, pl_module: "LightningModule"):
-        if self.include_train:
-            self.predict_intermediate(trainer, pl_module, split="train")
+        if self.train_batch is not None:
+            self._predict_intermediate(trainer, pl_module, split="train")
 
-    def predict_intermediate(self, trainer, pl_module: "LightningModule", split="val"):
+    def _predict_intermediate(self, trainer, pl_module: "LightningModule", split="val"):
         """Make predictions on a fixed batch of data and log the results to Tensorboard."""
 
         # Make predictions.
-        imgs, targets = self.imgs, self.targets
+        if split == "train":
+            imgs, targets = self.train_batch
+        else:  # split == "val"
+            imgs, targets = self.val_batch
+        imgs = imgs.cuda() if self.use_gpu else imgs
         with torch.no_grad():
             pl_module.eval()  # TODO: check to what value this should be set afterwards
-            _, preds = pl_module(
-                imgs.cuda()
-            )  # not ideal to call .cuda(), but I'm assuming I'm always using a GPU
+            _, preds = pl_module(imgs)
 
         # Find padding and <EOS> positions in predictions and targets.
         eos_idxs_pred = (
