@@ -24,11 +24,13 @@ class LogModelPredictions(Callback):
         label_encoder: "LabelEncoder",
         val_batch: Tuple[torch.Tensor, torch.Tensor],
         use_gpu: bool = True,
+        data_format: str = "word",
         train_batch: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
     ):
         self.label_encoder = label_encoder
         self.val_batch = val_batch
         self.use_gpu = use_gpu
+        self.data_format = data_format
         self.train_batch = train_batch
 
     def on_validation_epoch_end(self, trainer, pl_module: "LightningModule"):
@@ -78,9 +80,9 @@ class LogModelPredictions(Callback):
                 target_str = "".join(self.label_encoder.inverse_transform(t))
 
             # Create plot.
-            ax = fig.add_subplot(
-                math.ceil(preds.size(0) / 2), 2, i + 1, xticks=[], yticks=[]
-            )
+            ncols = 2 if self.data_format == "word" else 1
+            nrows = math.ceil(preds.size(0) / ncols)
+            ax = fig.add_subplot(nrows, ncols, i + 1, xticks=[], yticks=[])
             matplotlib_imshow(imgs[i])
             ax.set_title(f"Pred: {pred_str}\nTarget: {target_str}")
 

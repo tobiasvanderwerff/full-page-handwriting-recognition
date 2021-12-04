@@ -212,6 +212,7 @@ def main(args):
                         )
                     )
                 ),
+                data_format=args.data_format,
                 use_gpu=(False if args.use_cpu else True),
             ),
             EarlyStopping(
