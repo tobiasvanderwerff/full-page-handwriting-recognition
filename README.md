@@ -20,10 +20,8 @@ pip install -r requirements.txt
 Now run the main script, e.g.
 
 ```shell
-python src/main.py --data_dir /path/to/IAM --data_format form --max_epochs 3
+python src/main.py --data_dir /path/to/IAM --data_format form --max_epochs 3 --use_cpu
 ```
-
-Be sure to run this on a GPU (not tested on CPU).
 
 NOTE: running this model on full page images can quickly lead to out-of-memory errors,
 since unprocessed form images from IAM can be up to 2479x3542 in size -- much larger
