@@ -6,7 +6,7 @@ via Image to Sequence Extraction" by Singh et al.
 import math
 from typing import Dict, Any, Tuple, Optional, Union, Callable
 
-from src.metrics import CharacterErrorRate, WordErrorRate
+from metrics import CharacterErrorRate, WordErrorRate
 
 import torch
 import torch.nn as nn
