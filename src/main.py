@@ -122,24 +122,16 @@ def main(args):
         model = LitFullPageHTREncoderDecoder.load_from_checkpoint(
             args.validate,
             label_encoder=ds.label_enc,
-            vocab_len=len(ds.vocab),
-            eos_tkn_idx=eos_tkn_idx,
-            sos_tkn_idx=sos_tkn_idx,
-            pad_tkn_idx=pad_tkn_idx,
         )
     else:
         model = LitFullPageHTREncoderDecoder(
             label_encoder=ds.label_enc,
-            encoder_name=args.encoder,
-            vocab_len=len(ds.vocab),
-            d_model=args.d_model,
             max_seq_len=IAMDataset.MAX_SEQ_LENS[args.data_format],
-            eos_tkn_idx=eos_tkn_idx,
-            sos_tkn_idx=sos_tkn_idx,
-            pad_tkn_idx=pad_tkn_idx,
+            d_model=args.d_model,
             num_layers=args.num_layers,
             nhead=args.nhead,
             dim_feedforward=args.dim_feedforward,
+            encoder_name=args.encoder,
             drop_enc=args.drop_enc,
             drop_dec=args.drop_dec,
             params_to_log={
@@ -156,6 +148,60 @@ def main(args):
             },
         )
 
+    callbacks = [
+        ModelCheckpoint(
+            save_top_k=(-1 if args.save_all_checkpoints else 3),
+            mode="min",
+            monitor="char_error_rate",
+            filename="{epoch}-{char_error_rate:.4f}-{word_error_rate:.4f}",
+        ),
+        EarlyStopping(
+            monitor="char_error_rate",
+            patience=args.early_stopping_patience,
+            verbose=True,
+            mode="min",
+        ),
+        LogModelPredictions(
+            ds.label_enc,
+            val_batch=next(
+                iter(
+                    DataLoader(
+                        Subset(
+                            ds_eval,
+                            random.sample(
+                                range(len(ds_eval)), LOGMODELPREDICTIONS_TO_SAMPLE
+                            ),
+                        ),
+                        batch_size=LOGMODELPREDICTIONS_TO_SAMPLE,
+                        shuffle=False,
+                        collate_fn=collate_fn,
+                        num_workers=args.num_workers,
+                        pin_memory=True,
+                    )
+                )
+            ),
+            train_batch=next(
+                iter(
+                    DataLoader(
+                        Subset(
+                            ds_train,
+                            random.sample(
+                                range(len(ds_train)), LOGMODELPREDICTIONS_TO_SAMPLE
+                            ),
+                        ),
+                        batch_size=LOGMODELPREDICTIONS_TO_SAMPLE,
+                        shuffle=False,
+                        collate_fn=collate_fn,
+                        num_workers=args.num_workers,
+                        pin_memory=True,
+                    )
+                )
+            ),
+            data_format=args.data_format,
+            use_gpu=(False if args.use_cpu else True),
+        ),
+    ]
+
     trainer = pl.Trainer(
         logger=tb_logger,
         strategy=(
@@ -169,61 +215,7 @@ def main(args):
         limit_train_batches=args.limit_train_batches,
         limit_val_batches=args.limit_val_batches,
         num_sanity_val_steps=args.num_sanity_val_steps,
-        callbacks=[
-            ModelCheckpoint(
-                save_top_k=(-1 if args.save_all_checkpoints else 3),
-                mode="min",
-                monitor="char_error_rate",
-                filename="{epoch}-{char_error_rate:.4f}-{word_error_rate:.4f}",
-            ),
-            LogModelPredictions(
-                ds.label_enc,
-                val_batch=next(
-                    iter(
-                        DataLoader(
-                            Subset(
-                                ds_eval,
-                                random.sample(
-                                    range(len(ds_eval)), LOGMODELPREDICTIONS_TO_SAMPLE
-                                ),
-                            ),
-                            batch_size=LOGMODELPREDICTIONS_TO_SAMPLE,
-                            shuffle=False,
-                            collate_fn=collate_fn,
-                            num_workers=args.num_workers,
-                            pin_memory=True,
-                        )
-                    )
-                ),
-                train_batch=next(
-                    iter(
-                        DataLoader(
-                            Subset(
-                                ds_train,
-                                random.sample(
-                                    range(len(ds_train)), LOGMODELPREDICTIONS_TO_SAMPLE
-                                ),
-                            ),
-                            batch_size=LOGMODELPREDICTIONS_TO_SAMPLE,
-                            shuffle=False,
-                            collate_fn=collate_fn,
-                            num_workers=args.num_workers,
-                            pin_memory=True,
-                        )
-                    )
-                ),
-                data_format=args.data_format,
-                use_gpu=(False if args.use_cpu else True),
-            ),
-            EarlyStopping(
-                monitor="char_error_rate",
-                patience=args.early_stopping_patience,
-                verbose=True,
-                mode="min",
-            ),
-        ],
-        # overfit_batches=1,
-        # profiler="simple",  # set this to get a profiler report showing mean duration of function calls
+        callbacks=callbacks,
     )
 
     if args.validate:  # validate a trained model
@@ -236,16 +228,6 @@ if __name__ == "__main__":
     # fmt: off
     parser = argparse.ArgumentParser()
 
-    # Model arguments.
-    parser.add_argument("--encoder", type=str, choices=["resnet18", "resnet34", "resnet50"], default="resnet18")
-    parser.add_argument("--accumulate_grad_batches", type=int, default=1)
-    parser.add_argument("--d_model", type=int, default=260)
-    parser.add_argument("--num_layers", type=int, default=6)
-    parser.add_argument("--nhead", type=int, default=4)
-    parser.add_argument("--dim_feedforward", type=int, default=1024)
-    parser.add_argument("--drop_enc", type=float, default=0.5, help="Encoder dropout.")
-    parser.add_argument("--drop_dec", type=float, default=0.5, help="Decoder dropout.")
-
     # Trainer arguments.
     parser.add_argument("--max_epochs", type=int, default=999)
     parser.add_argument("--batch_size", type=int, default=8)
@@ -254,6 +236,7 @@ if __name__ == "__main__":
     parser.add_argument("--precision", type=int, default=16, help="How many bits of floating point precision to use.")
     parser.add_argument("--label_smoothing", type=float, default=0.0,
                         help="Label smoothing epsilon (0.0 indicates no smoothing)")
+    parser.add_argument("--accumulate_grad_batches", type=int, default=1)
     parser.add_argument("--limit_train_batches", type=float, default=1.0)
     parser.add_argument("--limit_val_batches", type=float, default=1.0)
     parser.add_argument("--early_stopping_patience", type=int, default=5)
@@ -268,6 +251,9 @@ if __name__ == "__main__":
     parser.add_argument("--debug_mode", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--validate", type=str, help="Validate a trained model, specified by its checkpoint path.")
+
+    parser = LitFullPageHTREncoderDecoder.add_model_specific_args(parser)
+
     args = parser.parse_args()
 
     main(args)
