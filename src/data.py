@@ -266,7 +266,7 @@ class IAMDataset(Dataset):
         return imgs, targets_padded
 
     def set_transforms_for_split(self, split: str):
-        _splits = ["train", "eval", "test"]
+        _splits = ["train", "val", "test"]
         err_message = f"{split} is not a possible split: {_splits}"
         assert split in _splits, err_message
         self.transforms = self._get_transforms(split)
@@ -283,7 +283,7 @@ class IAMDataset(Dataset):
 
         if split == "train":
             return transforms.train_trnsf
-        elif split == "test" or split == "eval":
+        elif split == "test" or split == "val":
             return transforms.test_trnsf
 
     def _check_for_cache(self, cache_path="cache/"):

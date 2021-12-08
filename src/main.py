@@ -62,7 +62,7 @@ def main(args):
         IAMDataset.collate_fn, pad_val=pad_tkn_idx, eos_tkn_idx=eos_tkn_idx
     )
 
-    # Split the dataset into train/eval/(test).
+    # Split the dataset into train/val/(test).
     if args.use_aachen_splits:
         # Use the Aachen splits for the IAM dataset. It should be noted that these
         # splits do not encompass the complete IAM dataset.
@@ -74,26 +74,26 @@ def main(args):
         test_splits = (aachen_path / "test.uttlist").read_text().splitlines()
 
         data_train = ds.data[ds.data["img_id"].isin(train_splits)]
-        data_eval = ds.data[ds.data["img_id"].isin(validation_splits)]
+        data_val = ds.data[ds.data["img_id"].isin(validation_splits)]
         data_test = ds.data[ds.data["img_id"].isin(test_splits)]
 
         ds_train = copy(ds)
         ds_train.data = data_train
         ds_train.set_transforms_for_split("train")
 
-        ds_eval = copy(ds)
-        ds_eval.data = data_eval
-        ds_eval.set_transforms_for_split("eval")
+        ds_val = copy(ds)
+        ds_val.data = data_val
+        ds_val.set_transforms_for_split("val")
 
         ds_test = copy(ds)
         ds_test.data = data_test
         ds_test.set_transforms_for_split("test")
     else:
-        ds_train, ds_eval = torch.utils.data.random_split(
+        ds_train, ds_val = torch.utils.data.random_split(
             ds, [math.ceil(0.8 * len(ds)), math.floor(0.2 * len(ds))]
         )
-        ds_eval.dataset = copy(ds)
-        ds_eval.dataset.set_transforms_for_split("eval")
+        ds_val.dataset = copy(ds)
+        ds_val.dataset.set_transforms_for_split("val")
 
     # Initialize dataloaders.
     dl_train = DataLoader(
@@ -104,8 +104,8 @@ def main(args):
         num_workers=args.num_workers,
         pin_memory=True,
     )
-    dl_eval = DataLoader(
-        ds_eval,
+    dl_val = DataLoader(
+        ds_val,
         batch_size=2 * args.batch_size,
         shuffle=False,
         collate_fn=collate_fn,
@@ -167,9 +167,9 @@ def main(args):
                 iter(
                     DataLoader(
                         Subset(
-                            ds_eval,
+                            ds_val,
                             random.sample(
-                                range(len(ds_eval)), LOGMODELPREDICTIONS_TO_SAMPLE
+                                range(len(ds_val)), LOGMODELPREDICTIONS_TO_SAMPLE
                             ),
                         ),
                         batch_size=LOGMODELPREDICTIONS_TO_SAMPLE,
@@ -219,9 +219,9 @@ def main(args):
     )
 
     if args.validate:  # validate a trained model
-        trainer.validate(model, dl_eval)
+        trainer.validate(model, dl_val)
     else:  # train a model
-        trainer.fit(model, dl_train, dl_eval)
+        trainer.fit(model, dl_train, dl_val)
 
 
 if __name__ == "__main__":
