@@ -5,10 +5,26 @@ import torch
 
 from util import matplotlib_imshow
 
+import pytorch_lightning as pl
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader, Dataset
 from pytorch_lightning.callbacks import Callback
 from sklearn.preprocessing import LabelEncoder
+
+
+class LogWorstPredictions(Callback):
+    """
+    At the end of every epoch, log the predictions with the highest loss values,
+    i.e. the worst predictions of the model.
+    """
+
+    def __init__(self):
+        pass
+
+    def on_validation_epoch_end(
+        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
+    ):
+        pass
+        # TODO
 
 
 class LogModelPredictions(Callback):
@@ -33,14 +49,20 @@ class LogModelPredictions(Callback):
         self.data_format = data_format
         self.train_batch = train_batch
 
-    def on_validation_epoch_end(self, trainer, pl_module: "LightningModule"):
+    def on_validation_epoch_end(
+        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
+    ):
         self._predict_intermediate(trainer, pl_module, split="val")
 
-    def on_train_epoch_end(self, trainer, pl_module: "LightningModule"):
+    def on_train_epoch_end(
+        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
+    ):
         if self.train_batch is not None:
             self._predict_intermediate(trainer, pl_module, split="train")
 
-    def _predict_intermediate(self, trainer, pl_module: "LightningModule", split="val"):
+    def _predict_intermediate(
+        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", split="val"
+    ):
         """Make predictions on a fixed batch of data and log the results to Tensorboard."""
 
         # Make predictions.
