@@ -95,9 +95,9 @@ def main(args):
         ds_val.dataset = copy(ds)
         ds_val.dataset.set_transforms_for_split("val")
 
-    if args.synthetic_data_augmentation_proba > 0.0:
+    if args.synthetic_augmentation_proba > 0.0:
         ds_train = IAMDatasetSynthetic(
-            ds_train, synth_prob=args.synthetic_data_augmentation_proba
+            ds_train, synth_prob=args.synthetic_augmentation_proba
         )
 
     # Initialize dataloaders.
@@ -150,6 +150,7 @@ def main(args):
                 "accumulate_grad_batches": args.accumulate_grad_batches,
                 "early_stopping_patience": args.early_stopping_patience,
                 "label_smoothing": args.label_smoothing,
+                "synthetic_augmentation_proba": args.synthetic_augmentation_proba,
             },
         )
 
@@ -256,8 +257,8 @@ if __name__ == "__main__":
     parser.add_argument("--debug_mode", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--validate", type=str, help="Validate a trained model, specified by its checkpoint path.")
-    parser.add_argument("--synthetic_data_augmentation_proba", type=float, default=0.0,
-                        help=("With the given probability, generate synthetic "
+    parser.add_argument("--synthetic_augmentation_proba", type=float, default=0.0,
+                        help=("With the given probability, sample synthetic "
                               "lines/forms as an additional source of data"))
 
     parser = LitFullPageHTREncoderDecoder.add_model_specific_args(parser)
