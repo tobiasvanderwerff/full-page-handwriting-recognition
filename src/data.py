@@ -499,6 +499,7 @@ class SyntheticDataGenerator(Dataset):
         super().__init__()
         self.iam_root = iam_root
         self.label_enc = label_encoder
+        self.transforms = transforms
         self.words_per_line = words_per_line
         self.lines_per_form = lines_per_form
         self.px_between_lines = px_between_lines
@@ -513,7 +514,7 @@ class SyntheticDataGenerator(Dataset):
             use_cache=False,
             skip_bad_segmentation=True,
         )
-        self.images.transforms = transforms
+        self.images.transforms = None
 
         self.rng = np.random.default_rng(rng_seed)
         self.background_smoothing_transform = A.RandomBrightnessContrast(
@@ -531,7 +532,7 @@ class SyntheticDataGenerator(Dataset):
             img, target = self.generate_line()
         if self.transforms is not None:
             img = self.transforms(image=img)["image"]
-        target_enc = list(self.label_encoder.transform([c for c in target.lower()]))
+        target_enc = self.label_encoder.transform([c for c in target.lower()])
         return img, target_enc
 
     def __len__(self):
