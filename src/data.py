@@ -15,11 +15,18 @@ import cv2 as cv
 import albumentations as A
 import torch
 import numpy as np
+from torch import Tensor
 from sklearn.preprocessing import LabelEncoder
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from PIL import Image
 
-from util import read_xml, find_child_by_tag, randomly_displace_and_pad, dpi_adjusting
+from util import (
+    read_xml,
+    find_child_by_tag,
+    randomly_displace_and_pad,
+    dpi_adjusting,
+    set_seed,
+)
 
 
 @dataclass
@@ -148,8 +155,8 @@ class IAMDataset(Dataset):
     root: Path
     data: pd.DataFrame
     label_enc: LabelEncoder
-    transforms: A.Compose
-    _parse_method: str
+    transforms: Optional[A.Compose]
+    parse_method: str
     _split: str
 
     def __init__(
@@ -173,22 +180,22 @@ class IAMDataset(Dataset):
         err_message = f"{split} is not a possible split: {_splits}"
         assert split in _splits, err_message
 
-        self._parse_method = parse_method
         self._split = split
         self._return_writer_id = return_writer_id
         self.root = Path(root)
         self.label_enc = label_enc
+        self.parse_method = parse_method
 
         if use_cache:
             self._check_for_cache()
 
         # Process the data.
         if not hasattr(self, "data"):
-            if self._parse_method == "form":
+            if self.parse_method == "form":
                 self.data = self._get_forms()
-            elif self._parse_method == "word":
+            elif self.parse_method == "word":
                 self.data = self._get_words(skip_bad_segmentation)
-            elif self._parse_method == "line":
+            elif self.parse_method == "line":
                 self.data = self._get_lines(skip_bad_segmentation)
 
         # Create the label encoder. We convert all ASCII characters to lower case.
@@ -219,8 +226,10 @@ class IAMDataset(Dataset):
         if all(col in data.keys() for col in ["bb_y_start", "bb_y_end"]):
             # Crop the image vertically.
             img = img[data["bb_y_start"] : data["bb_y_end"], :]
-        if not isinstance(img, np.ndarray):
-            print(type(img), data["img_path"])
+        assert isinstance(img, np.ndarray), (
+            f"Error: image at path {data['img_path']} is not properly loaded. "
+            f"Is there something wrong with this image?"
+        )
         if self.transforms is not None:
             img = self.transforms(image=img)["image"]
         if self._return_writer_id:
@@ -237,7 +246,7 @@ class IAMDataset(Dataset):
         pad_val: int,
         eos_tkn_idx: int,
         dataset_returns_writer_id: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Union[Tuple[Tensor, Tensor], Tuple[Tensor, Tensor, Tensor]]:
         if dataset_returns_writer_id:
             imgs, writer_ids, targets = zip(*batch)
         else:
@@ -274,10 +283,10 @@ class IAMDataset(Dataset):
     def _get_transforms(self, split: str) -> A.Compose:
         max_img_w = self.MAX_FORM_WIDTH
 
-        if self._parse_method == "form":
+        if self.parse_method == "form":
             max_img_h = (self.data["bb_y_end"] - self.data["bb_y_start"]).max()
             transforms = IAMImageTransforms((max_img_h, max_img_w))
-        elif self._parse_method == "word" or self._parse_method == "line":
+        elif self.parse_method == "word" or self.parse_method == "line":
             max_img_h = self.MAX_FORM_HEIGHT
             transforms = IAMImageTransforms((max_img_h, max_img_w), "word")
 
@@ -288,8 +297,8 @@ class IAMDataset(Dataset):
 
     def _check_for_cache(self, cache_path="cache/"):
         """Check for cached files and load them if available."""
-        df_path = Path(cache_path) / f"IAM-{self._parse_method}-df.pkl"
-        le_path = Path(cache_path) / f"IAM-{self._parse_method}-labelenc.pkl"
+        df_path = Path(cache_path) / f"IAM-{self.parse_method}-df.pkl"
+        le_path = Path(cache_path) / f"IAM-{self.parse_method}-labelenc.pkl"
         if df_path.is_file():
             self.data = pd.read_pickle(df_path)
         if le_path.is_file():
@@ -299,8 +308,8 @@ class IAMDataset(Dataset):
         """Cache the dataframe containing the data and the label encoder."""
         cache_dir = Path(cache_path)
         cache_dir.mkdir(exist_ok=True)
-        df_path = cache_dir / f"IAM-{self._parse_method}-df.pkl"
-        le_path = cache_dir / f"IAM-{self._parse_method}-labelenc.pkl"
+        df_path = cache_dir / f"IAM-{self.parse_method}-df.pkl"
+        le_path = cache_dir / f"IAM-{self.parse_method}-labelenc.pkl"
         if not df_path.is_file():
             self.data.to_pickle(df_path)
         if not le_path.is_file():
@@ -443,23 +452,60 @@ class IAMDataset(Dataset):
         return None
 
 
-class SyntheticDataGenerator:
-    # TODO: make a synthetic data generator. Some considerations:
-    # 1. At what level to concatentate (e.g. word, line, sentence). What effect will
-    #    this choice have on the language model that is trained?
-    # 2. What heuristics to apply, e.g. minimum line length to avoid lines that are
-    #    only one or a few words.
+@dataclass
+class TemporalStack:
+    """A stack where each item on the stack has an associated age."""
 
-    # TODO: sample several lines to create a full page image.
+    @dataclass
+    class StackItem:
+        value: Any
+        age: int = 0
+
+    items: List[StackItem] = field(default_factory=list)
+
+    def time_step(self):
+        # Increment age by 1 for each item on the stack.
+        for item in self.items:
+            item.age += 1
+
+    def add_item(self, x: Any):
+        self.items.append(self.StackItem(x))
+
+    def is_empty(self):
+        return len(self) == 0
+
+    def pop(self):
+        return self.items.pop().value
+
+    def __len__(self):
+        return len(self.items)
+
+
+class SyntheticDataGenerator(Dataset):
+    PUNCTUATION = [",", ".", ";", ":", "'", '"', "!", "?"]
 
     def __init__(
         self,
-        iam_root: str,
+        iam_root: Union[str, Path],
+        label_encoder: Optional[LabelEncoder] = None,
+        transforms: Optional[A.Compose] = None,
         words_per_line: Tuple[int, int] = (5, 13),
+        lines_per_form: Tuple[int, int] = (3, 9),
+        px_between_lines: Tuple[int, int] = (50, 100),
         px_between_words: int = 50,
+        sample_form: bool = False,
+        rng_seed: int = 0,
     ):
+        super().__init__()
+        self.iam_root = iam_root
+        self.label_enc = label_encoder
         self.words_per_line = words_per_line
+        self.lines_per_form = lines_per_form
+        self.px_between_lines = px_between_lines
         self.px_between_words = px_between_words
+        self.sample_form = sample_form
+        self.rng_seed = rng_seed
+
         self.images = IAMDataset(
             iam_root,
             "word",
@@ -467,7 +513,50 @@ class SyntheticDataGenerator:
             use_cache=False,
             skip_bad_segmentation=True,
         )
-        self.images.transforms = None
+        self.images.transforms = transforms
+
+        self.rng = np.random.default_rng(rng_seed)
+        self.background_smoothing_transform = A.RandomBrightnessContrast(
+            always_apply=True,
+            brightness_limit=(0.10, 0.15),
+            contrast_limit=(0.10, 0.15),
+        )
+
+    def __getitem__(self, idx):
+        # Note that idx is not used, rather a new image is generated every time this
+        # method is called.
+        if self.sample_form:
+            img, target = self.generate_form()
+        else:
+            img, target = self.generate_line()
+        if self.transforms is not None:
+            img = self.transforms(image=img)["image"]
+        target_enc = list(self.label_encoder.transform([c for c in target.lower()]))
+        return img, target_enc
+
+    def __len__(self):
+        # This dataset does not have a finite length since it can generate random
+        # images at will, so simply return 1.
+        return 1
+
+    @property
+    def label_encoder(self):
+        if self.label_enc is not None:
+            return self.label_enc
+        return self.images.label_enc
+
+    @staticmethod
+    def get_worker_init_fn():
+        def worker_init_fn(worker_id: int):
+            set_seed(worker_id)
+            worker_info = torch.utils.data.get_worker_info()
+            dataset = worker_info.dataset  # the dataset copy in this worker process
+            dataset.set_rng(worker_id)
+
+        return worker_init_fn
+
+    def set_rng(self, seed: int):
+        self.rng = np.random.default_rng(seed)
 
     def sample_image(self) -> Tuple[np.ndarray, str]:
         idx = random.randint(0, len(self.images))
@@ -475,57 +564,27 @@ class SyntheticDataGenerator:
         target = "".join(self.images.label_enc.inverse_transform(target))
         return img, target
 
-    @dataclass
-    class TemporalStack:
-        """A stack where each item on the stack has an associated age."""
-
-        @dataclass
-        class StackItem:
-            value: Any
-            age: int = 0
-
-        items: List[StackItem] = field(default_factory=list)
-
-        def time_step(self):
-            # Increment age by 1 for each item on the stack.
-            for item in self.items:
-                item.age += 1
-
-        def add_item(self, x: Any):
-            self.items.append(self.StackItem(x))
-
-        def is_empty(self):
-            return len(self) == 0
-
-        def pop(self):
-            return self.items.pop().value
-
-        def __len__(self):
-            return len(self.items)
-
-    def generate_line(self):
+    def generate_line(self, apply_smoothing=True) -> Tuple[np.ndarray, str]:
         curr_pos, n_sampled_words = 0, 0
         imgs, targets = [], []
         target_str, last_target = "", ""
         last_target_popped = False
-        img_stack = self.TemporalStack()
+        img_stack = TemporalStack()
 
-        # Init random number generator.
-        rng = np.random.default_rng()
-
-        # Determine the amount of words in the line by sampling from a uniform
+        # Determine the amount of words in the line by sampling from a discrete uniform
         # distribution.
-        n_words_to_sample = rng.uniform(*self.words_per_line)
+        n_words_to_sample = self.rng.integers(*self.words_per_line)
 
         # TODO: right now words are sampled randomly. Instead, use a language model to
         # guide the sampled words. Temperature of the LM should be set to encourage
         # variation, since otherwise some words may never be sampled.
+
         # Sample images.
         while n_sampled_words < n_words_to_sample:
             # Probability of sampling from the stack is determined by an exponential
             # function of the age of the youngest item on the stack.
             min_age = 0 if img_stack.is_empty() else img_stack.items[-1].age
-            pop_the_stack = (not img_stack.is_empty()) and rng.binomial(
+            pop_the_stack = (not img_stack.is_empty()) and self.rng.binomial(
                 1, 1 - (0.5 ** (min_age - 1))
             )
             if pop_the_stack:
@@ -534,9 +593,9 @@ class SyntheticDataGenerator:
                 img, tgt = self.sample_image()
             h, w = img.shape
 
-            # Some basic heuristics to avoid strange looking sentences.
+            # A basic heuristic to avoid strange looking sentences.
             if (
-                last_target in [".", ",", ";", ":"] and tgt in [".", ",", ";", ":"]
+                last_target in self.PUNCTUATION and tgt in self.PUNCTUATION
             ) or last_target == tgt:
                 continue
 
@@ -547,8 +606,9 @@ class SyntheticDataGenerator:
 
             if (
                 pop_the_stack
-                or tgt in [".", ",", "?", "!"]
+                or tgt in [c for c in self.PUNCTUATION if c not in ["'", '"']]
                 or (last_target in ['"', "'"] and not last_target_popped)
+                or n_sampled_words == 0
             ):
                 # Surrounding quotes should not have spaces on at least one side,
                 # so they should be "glued" to the next or previous target word.
@@ -559,7 +619,9 @@ class SyntheticDataGenerator:
             imgs.append(img)
 
             n_sampled_words += 1
-            curr_pos += w + self.px_between_words
+            curr_pos += w
+            if tgt not in self.PUNCTUATION:
+                curr_pos += self.px_between_words
             last_target = tgt
             last_target_popped = True if pop_the_stack else False
             img_stack.time_step()
@@ -573,29 +635,107 @@ class SyntheticDataGenerator:
             curr_pos += img.shape[1]
 
         # Concatenate the images into a line.
-        max_h = max(im.shape[0] for im in imgs)
-        line = np.ones((max_h, curr_pos), dtype=imgs[0].dtype) * 255
+        line_h = max(im.shape[0] for im in imgs)
+        line_w = max(curr_pos, sum(im.shape[1] + self.px_between_words for im in imgs))
+        line = np.ones((line_h, line_w), dtype=imgs[0].dtype) * 255
         curr_pos = 0
+        prev_lower_bound = line_h
         assert len(imgs) == len(targets)
         for img, tgt in zip(imgs, targets):
             h, w = img.shape
-            start_h = int((max_h - h) / 2)  # center the image in the middle of the line
+            # Center the image in the middle of the line.
+            start_h = min(max(0, int((line_h - h) / 2)), line_h - h)
 
-            # TODO: smaller spacing for leestekens (', ", ;, etc.)
-            # If sampled a comma or dot, place them at the bottom of the line.
             if tgt in [",", "."]:
-                start_h = max_h - h
-            # If sampled a quote, place them at the top of the line.
-            if tgt in ['"', "'"]:
+                # If sampled a comma or dot, place them at the bottom of the line.
+                start_h = min(max(0, prev_lower_bound - int(h / 2)), line_h - h)
+            elif tgt in ['"', "'"]:
+                # If sampled a quote, place them at the top of the line.
                 start_h = 0
+            if tgt in self.PUNCTUATION:
+                # Reduce horizontal spacing for punctuation tokens.
+                curr_pos = max(0, curr_pos - self.px_between_words)
+
+            assert curr_pos + w <= line_w, f"{curr_pos + w} > {line_w}"
+            assert start_h + h <= line_h, f"{start_h + h} > {line_h}"
 
             # Concatenate the word image to the line.
             line[start_h : start_h + h, curr_pos : curr_pos + w] = img
 
             curr_pos += w + self.px_between_words
+            prev_lower_bound = start_h + h
 
         # Apply random brightness and contrast adjustment in an attempt to smooth out
         # the background of the image.
-        line = A.RandomBrightnessContrast(always_apply=True)(image=line)["image"]
+        if apply_smoothing:
+            line = self.background_smoothing_transform(image=line)["image"]
 
         return line, target_str
+
+    def generate_form(self) -> Tuple[np.ndarray, str]:
+        target = ""
+        lines = []
+        n_lines_to_sample = self.rng.integers(*self.lines_per_form)
+        px_between_lines = self.rng.integers(*self.px_between_lines)
+
+        # TODO: make the numbers of words per line (roughly) uniform.
+
+        # Sample line images.
+        for i in range(n_lines_to_sample):
+            line_img, line_target = self.generate_line(apply_smoothing=False)
+            lines.append(line_img)
+            target += line_target + "\n"
+        form_w = max(l.shape[1] for l in lines)
+        form_h = sum(l.shape[0] + px_between_lines for l in lines)
+        form = np.ones((form_h, form_w), dtype=lines[0].dtype) * 255
+
+        # Concatenate the lines vertically.
+        curr_h = 0
+        for line_img in lines:
+            h, w = line_img.shape
+            form[curr_h : curr_h + h, :w] = line_img
+            curr_h += h + px_between_lines
+
+        form = self.background_smoothing_transform(image=form)["image"]
+
+        return form, target
+
+
+class IAMDatasetSynthetic(Dataset):
+    """
+    A Pytorch dataset combining the IAM dataset with the SyntheticDataGenerator
+    dataset.
+    """
+
+    iam_dataset: IAMDataset
+    synth_dataset: SyntheticDataGenerator
+    synth_prob: float
+
+    def __init__(self, iam_dataset: IAMDataset, synth_prob: float = 0.3):
+        """
+        Args:
+            iam_dataset (Dataset): the IAM dataset to sample from
+            synth_prob (float): the probability of sampling a synthetic image when
+                calling `__getitem__()`.
+        """
+        self.iam_dataset = iam_dataset
+        self.synth_prob = synth_prob
+        self.synth_dataset = SyntheticDataGenerator(
+            iam_root=iam_dataset.root,
+            label_encoder=iam_dataset.label_enc,
+            transforms=iam_dataset.transforms,
+            sample_form=(True if iam_dataset.parse_method == "form" else False),
+        )
+
+    def __getitem__(self, idx):
+        iam = self.iam_dataset
+        if random.random() > 1 - self.synth_prob:
+            # Sample from the synthetic dataset.
+            img, target = self.synth_dataset[0]
+        else:
+            # Index the IAM dataset.
+            img, target = iam[idx]
+        return img, target
+
+    def __len__(self):
+        return len(self.iam_dataset)

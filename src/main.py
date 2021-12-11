@@ -10,7 +10,7 @@ from functools import partial
 from models import *
 from lit_models import LitFullPageHTREncoderDecoder
 from lit_callbacks import LogModelPredictions
-from data import IAMDataset
+from data import IAMDataset, IAMDatasetSynthetic
 
 import pytorch_lightning as pl
 import pandas as pd
@@ -94,6 +94,11 @@ def main(args):
         )
         ds_val.dataset = copy(ds)
         ds_val.dataset.set_transforms_for_split("val")
+
+    if args.synthetic_data_augmentation_proba > 0.0:
+        ds_train = IAMDatasetSynthetic(
+            ds_train, synth_prob=args.synthetic_data_augmentation_proba
+        )
 
     # Initialize dataloaders.
     dl_train = DataLoader(
@@ -234,7 +239,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--num_nodes", type=int, default=1, help="Number of nodes to train on.")
     parser.add_argument("--precision", type=int, default=16, help="How many bits of floating point precision to use.")
-    parser.add_argument("--label_smoothing", type=float, default=0.0,
+    parser.add_argument("--label_smoothng", type=float, default=0.0,
                         help="Label smoothing epsilon (0.0 indicates no smoothing)")
     parser.add_argument("--accumulate_grad_batches", type=int, default=1)
     parser.add_argument("--limit_train_batches", type=float, default=1.0)
@@ -251,6 +256,9 @@ if __name__ == "__main__":
     parser.add_argument("--debug_mode", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--validate", type=str, help="Validate a trained model, specified by its checkpoint path.")
+    parser.add_argument("--synthetic_data_augmentation_proba", type=float, default=0.0,
+                        help=("With the given probability, generate synthetic "
+                              "lines/forms as an additional source of data"))
 
     parser = LitFullPageHTREncoderDecoder.add_model_specific_args(parser)
 

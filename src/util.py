@@ -10,6 +10,13 @@ import numpy as np
 import cv2
 
 
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
 def read_xml(xml_file: Union[Path, str]) -> ET.Element:
     tree = ET.parse(xml_file)
     root = tree.getroot()
