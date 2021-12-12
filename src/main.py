@@ -3,15 +3,17 @@
 import argparse
 import pickle
 import random
+import math
 from copy import copy
 from pathlib import Path
 from functools import partial
 
-from models import *
 from lit_models import LitFullPageHTREncoderDecoder
 from lit_callbacks import LogModelPredictions
 from data import IAMDataset, IAMDatasetSynthetic
+from util import LitProgressBar
 
+import torch
 import pytorch_lightning as pl
 import pandas as pd
 from torch.utils.data import DataLoader, Subset
@@ -19,7 +21,6 @@ from pytorch_lightning import seed_everything
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.plugins import DDPPlugin
-
 
 LOGGING_DIR = "lightning_logs/"
 LOGMODELPREDICTIONS_TO_SAMPLE = 8
@@ -149,12 +150,13 @@ def main(args):
                 "precision": args.precision,
                 "accumulate_grad_batches": args.accumulate_grad_batches,
                 "early_stopping_patience": args.early_stopping_patience,
-                "label_smoothing": args.label_smoothing,
+                # "label_smoothing": args.label_smoothing,
                 "synthetic_augmentation_proba": args.synthetic_augmentation_proba,
             },
         )
 
     callbacks = [
+        LitProgressBar(),
         ModelCheckpoint(
             save_top_k=(-1 if args.save_all_checkpoints else 3),
             mode="min",
@@ -166,6 +168,7 @@ def main(args):
             patience=args.early_stopping_patience,
             verbose=True,
             mode="min",
+            check_on_train_epoch_end=False,
         ),
         LogModelPredictions(
             ds.label_enc,
@@ -240,8 +243,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--num_nodes", type=int, default=1, help="Number of nodes to train on.")
     parser.add_argument("--precision", type=int, default=16, help="How many bits of floating point precision to use.")
-    parser.add_argument("--label_smoothing", type=float, default=0.0,
-                        help="Label smoothing epsilon (0.0 indicates no smoothing)")
+    # parser.add_argument("--label_smoothing", type=float, default=0.0,
+    #                     help="Label smoothing epsilon (0.0 indicates no smoothing)")
     parser.add_argument("--accumulate_grad_batches", type=int, default=1)
     parser.add_argument("--limit_train_batches", type=float, default=1.0)
     parser.add_argument("--limit_val_batches", type=float, default=1.0)
@@ -254,7 +257,6 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str)
     parser.add_argument("--data_format", type=str, choices=["form", "line", "word"], default="word")
     parser.add_argument("--use_aachen_splits", action="store_true", default=False)
-    parser.add_argument("--debug_mode", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--validate", type=str, help="Validate a trained model, specified by its checkpoint path.")
     parser.add_argument("--synthetic_augmentation_proba", type=float, default=0.0,

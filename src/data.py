@@ -515,13 +515,7 @@ class SyntheticDataGenerator(Dataset):
             skip_bad_segmentation=True,
         )
         self.images.transforms = None
-
         self.rng = np.random.default_rng(rng_seed)
-        self.background_smoothing_transform = A.RandomBrightnessContrast(
-            always_apply=True,
-            brightness_limit=(0.10, 0.15),
-            contrast_limit=(0.10, 0.15),
-        )
 
     def __getitem__(self, idx):
         # Note that idx is not used, rather a new image is generated every time this
@@ -565,7 +559,7 @@ class SyntheticDataGenerator(Dataset):
         target = "".join(self.images.label_enc.inverse_transform(target))
         return img, target
 
-    def generate_line(self, apply_smoothing=True) -> Tuple[np.ndarray, str]:
+    def generate_line(self) -> Tuple[np.ndarray, str]:
         curr_pos, n_sampled_words = 0, 0
         imgs, targets = [], []
         target_str, last_target = "", ""
@@ -666,11 +660,6 @@ class SyntheticDataGenerator(Dataset):
             curr_pos += w + self.px_between_words
             prev_lower_bound = start_h + h
 
-        # Apply random brightness and contrast adjustment in an attempt to smooth out
-        # the background of the image.
-        if apply_smoothing:
-            line = self.background_smoothing_transform(image=line)["image"]
-
         return line, target_str
 
     def generate_form(self) -> Tuple[np.ndarray, str]:
@@ -683,7 +672,7 @@ class SyntheticDataGenerator(Dataset):
 
         # Sample line images.
         for i in range(n_lines_to_sample):
-            line_img, line_target = self.generate_line(apply_smoothing=False)
+            line_img, line_target = self.generate_line()
             lines.append(line_img)
             target += line_target + "\n"
         form_w = max(l.shape[1] for l in lines)
@@ -696,8 +685,6 @@ class SyntheticDataGenerator(Dataset):
             h, w = line_img.shape
             form[curr_h : curr_h + h, :w] = line_img
             curr_h += h + px_between_lines
-
-        form = self.background_smoothing_transform(image=form)["image"]
 
         return form, target
 
