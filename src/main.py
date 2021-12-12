@@ -160,11 +160,11 @@ def main(args):
         ModelCheckpoint(
             save_top_k=(-1 if args.save_all_checkpoints else 3),
             mode="min",
-            monitor="char_error_rate",
+            monitor="word_error_rate",
             filename="{epoch}-{char_error_rate:.4f}-{word_error_rate:.4f}",
         ),
         EarlyStopping(
-            monitor="char_error_rate",
+            monitor="word_error_rate",
             patience=args.early_stopping_patience,
             verbose=True,
             mode="min",
