@@ -70,7 +70,7 @@ class LogModelPredictions(Callback):
             imgs, targets = self.train_batch
         else:  # split == "val"
             imgs, targets = self.val_batch
-        with torch.no_grad():
+        with torch.inference_mode():
             pl_module.eval()
             _, preds, _ = pl_module(imgs.cuda() if self.use_gpu else imgs)
 
