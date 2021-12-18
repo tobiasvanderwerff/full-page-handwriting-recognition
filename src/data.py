@@ -481,7 +481,14 @@ class TemporalStack:
         return len(self.items)
 
 
-class SyntheticDataGenerator(Dataset):
+class IAMSyntheticDataGenerator(Dataset):
+    """
+    Data generator that creates synthetic line/form images by stitching together word
+    images from the IAM dataset.
+    Calling `__getitem__()` samples a newly generated synthetic image every time
+    it is called.
+    """
+
     PUNCTUATION = [",", ".", ";", ":", "'", '"', "!", "?"]
 
     def __init__(
@@ -517,21 +524,21 @@ class SyntheticDataGenerator(Dataset):
         self.images.transforms = None
         self.rng = np.random.default_rng(rng_seed)
 
-    def __getitem__(self, idx):
-        # Note that idx is not used, rather a new image is generated every time this
-        # method is called.
+    def __getitem__(self, *args, **kwargs):
+        """By calling this method, a newly generated synthetic image is sampled."""
         if self.sample_form:
             img, target = self.generate_form()
         else:
             img, target = self.generate_line()
         if self.transforms is not None:
             img = self.transforms(image=img)["image"]
+        # Encode the target sequence using the label encoder.
         target_enc = self.label_encoder.transform([c for c in target.lower()])
         return img, target_enc
 
     def __len__(self):
         # This dataset does not have a finite length since it can generate random
-        # images at will, so simply return 1.
+        # images at will, so return 1.
         return 1
 
     @property
@@ -559,16 +566,19 @@ class SyntheticDataGenerator(Dataset):
         target = "".join(self.images.label_enc.inverse_transform(target))
         return img, target
 
-    def generate_line(self) -> Tuple[np.ndarray, str]:
+    def generate_line(
+        self, n_words_to_sample: Optional[int] = None
+    ) -> Tuple[np.ndarray, str]:
         curr_pos, n_sampled_words = 0, 0
         imgs, targets = [], []
         target_str, last_target = "", ""
         last_target_popped = False
         img_stack = TemporalStack()
 
-        # Determine the amount of words in the line by sampling from a discrete uniform
-        # distribution.
-        n_words_to_sample = self.rng.integers(*self.words_per_line)
+        # If the number of words to sample is not given, determine the amount of words
+        # in the line by sampling from a discrete uniform distribution.
+        if n_words_to_sample is None:
+            n_words_to_sample = self.rng.integers(*self.words_per_line)
 
         # TODO: right now words are sampled randomly. Instead, use a language model to
         # guide the sampled words. Temperature of the LM should be set to encourage
@@ -666,13 +676,12 @@ class SyntheticDataGenerator(Dataset):
         target = ""
         lines = []
         n_lines_to_sample = self.rng.integers(*self.lines_per_form)
+        n_words_to_sample = self.rng.integers(*self.words_per_line)
         px_between_lines = self.rng.integers(*self.px_between_lines)
-
-        # TODO: make the numbers of words per line (roughly) uniform.
 
         # Sample line images.
         for i in range(n_lines_to_sample):
-            line_img, line_target = self.generate_line()
+            line_img, line_target = self.generate_line(n_words_to_sample)
             lines.append(line_img)
             target += line_target + "\n"
         form_w = max(l.shape[1] for l in lines)
@@ -691,12 +700,15 @@ class SyntheticDataGenerator(Dataset):
 
 class IAMDatasetSynthetic(Dataset):
     """
-    A Pytorch dataset combining the IAM dataset with the SyntheticDataGenerator
+    A Pytorch dataset combining the IAM dataset with the IAMSyntheticDataGenerator
     dataset.
+
+    The distribution of real/synthetic images can be controlled by setting the
+    `synth_prob` argument.
     """
 
     iam_dataset: IAMDataset
-    synth_dataset: SyntheticDataGenerator
+    synth_dataset: IAMSyntheticDataGenerator
     synth_prob: float
 
     def __init__(self, iam_dataset: IAMDataset, synth_prob: float = 0.3):
@@ -708,7 +720,7 @@ class IAMDatasetSynthetic(Dataset):
         """
         self.iam_dataset = iam_dataset
         self.synth_prob = synth_prob
-        self.synth_dataset = SyntheticDataGenerator(
+        self.synth_dataset = IAMSyntheticDataGenerator(
             iam_root=iam_dataset.root,
             label_encoder=iam_dataset.label_enc,
             transforms=iam_dataset.transforms,

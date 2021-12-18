@@ -260,8 +260,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--validate", type=str, help="Validate a trained model, specified by its checkpoint path.")
     parser.add_argument("--synthetic_augmentation_proba", type=float, default=0.0,
-                        help=("With the given probability, sample synthetic "
-                              "lines/forms as an additional source of data"))
+                        help=("Probability of sampling synthetic IAM line/form images "
+                              "during training."))
 
     parser = LitFullPageHTREncoderDecoder.add_model_specific_args(parser)
 
