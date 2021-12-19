@@ -1,11 +1,7 @@
-#!/usr/bin/env python3
-
 import xml.etree.ElementTree as ET
 import html
 import pickle
 import random
-from math import ceil
-from functools import partial
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Union, Tuple, Dict, Sequence, Optional, List, Any
@@ -23,120 +19,9 @@ from PIL import Image
 from util import (
     read_xml,
     find_child_by_tag,
-    randomly_displace_and_pad,
-    dpi_adjusting,
     set_seed,
 )
-
-
-@dataclass
-class IAMImageTransforms:
-    """Image transforms for the IAM dataset.
-
-    All images are padded to the same size. Images are randomly displaced
-    before padding during training, and centered during validation and
-    testing.
-    """
-
-    max_img_size: Tuple[int, int]  # (h, w)
-    parse_method: Optional[str] = ""
-    scale: int = (
-        0.5  # assuming A4 paper, this gives ~140 DPI (see Singh et al. p. 8, section 4)
-    )
-    random_scale_limit: float = 0.1
-    random_rotate_limit: int = 10
-    normalize_params: Tuple[float, float] = (
-        0.5,
-        0.5,
-    )  # TODO: find proper normalization params
-    train_trnsf: A.Compose = field(init=False)
-    test_trnsf: A.Compose = field(init=False)
-
-    def __post_init__(self):
-        scale, random_scale_limit, random_rotate_limit, normalize_params = (
-            self.scale,
-            self.random_scale_limit,
-            self.random_rotate_limit,
-            self.normalize_params,
-        )
-        max_img_h, max_img_w = self.max_img_size
-
-        max_scale = scale + scale * random_scale_limit
-        padded_h, padded_w = ceil(max_scale * max_img_h), ceil(max_scale * max_img_w)
-
-        if self.parse_method == "word":
-            self.train_trnsf = A.Compose(
-                [
-                    A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.SafeRotate(
-                        limit=random_rotate_limit,
-                        border_mode=cv.BORDER_CONSTANT,
-                        value=0,
-                    ),
-                    A.RandomBrightnessContrast(),
-                    A.GaussNoise(),
-                    A.Normalize(*normalize_params),
-                ]
-            )
-            self.test_trnsf = A.Compose(
-                [
-                    A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.Normalize(*normalize_params),
-                ]
-            )
-        elif self.parse_method == "line":
-            self.train_trnsf = A.Compose(
-                [
-                    A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.RandomScale(scale_limit=random_scale_limit, p=0.5),
-                    A.SafeRotate(
-                        limit=random_rotate_limit,
-                        border_mode=cv.BORDER_CONSTANT,
-                        value=0,
-                    ),
-                    A.RandomBrightnessContrast(),
-                    A.GaussNoise(),
-                    A.Normalize(*normalize_params),
-                ]
-            )
-            self.test_trnsf = A.Compose(
-                [
-                    A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.Normalize(*normalize_params),
-                ]
-            )
-        else:  # forms by default
-            self.train_trnsf = A.Compose(
-                [
-                    A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.RandomScale(scale_limit=random_scale_limit, p=0.5),
-                    # SafeRotate is preferred over Rotate because it does not cut off
-                    # text when it extends out of the frame after rotation.
-                    A.SafeRotate(
-                        limit=random_rotate_limit,
-                        border_mode=cv.BORDER_CONSTANT,
-                        value=0,
-                    ),
-                    A.RandomBrightnessContrast(),
-                    A.Perspective(scale=(0.03, 0.05)),
-                    A.GaussNoise(),
-                    A.Lambda(
-                        image=partial(
-                            randomly_displace_and_pad, padded_size=(padded_h, padded_w)
-                        )
-                    ),
-                    A.Normalize(*normalize_params),
-                ]
-            )
-            self.test_trnsf = A.Compose(
-                [
-                    A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.PadIfNeeded(
-                        padded_h, padded_w, border_mode=cv.BORDER_CONSTANT, value=0
-                    ),
-                    A.Normalize(*normalize_params),
-                ]
-            )
+from transforms import IAMImageTransforms
 
 
 class IAMDataset(Dataset):
