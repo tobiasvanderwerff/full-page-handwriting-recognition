@@ -1,9 +1,8 @@
 import random
 import math
-from math import ceil
 from functools import partial
 from dataclasses import dataclass, field
-from typing import Tuple, Optional
+from typing import Tuple
 
 import cv2 as cv
 import albumentations as A
@@ -46,22 +45,19 @@ def dpi_adjusting(img: np.ndarray, scale: int, **kwargs) -> np.ndarray:
 class IAMImageTransforms:
     """Image transforms for the IAM dataset.
 
-    All images are padded to the same size. Images are randomly displaced
-    before padding during training, and centered during validation and
+    All images are padded to the same size. For form images, images are randomly
+    displaced before padding during training, and centered during validation and
     testing.
     """
 
     max_img_size: Tuple[int, int]  # (h, w)
-    parse_method: Optional[str] = ""
+    parse_method: str
     scale: int = (
         0.5  # assuming A4 paper, this gives ~140 DPI (see Singh et al. p. 8, section 4)
     )
     random_scale_limit: float = 0.1
     random_rotate_limit: int = 10
-    normalize_params: Tuple[float, float] = (
-        0.5,
-        0.5,
-    )
+    normalize_params: Tuple[float, float] = (0.5, 0.5)
     train_trnsf: A.Compose = field(init=False)
     test_trnsf: A.Compose = field(init=False)
 
@@ -75,12 +71,15 @@ class IAMImageTransforms:
         max_img_h, max_img_w = self.max_img_size
 
         max_scale = scale + scale * random_scale_limit
-        padded_h, padded_w = ceil(max_scale * max_img_h), ceil(max_scale * max_img_w)
+        padded_h, padded_w = math.ceil(max_scale * max_img_h), math.ceil(
+            max_scale * max_img_w
+        )
 
         if self.parse_method == "word":
             self.train_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
+                    A.RandomScale(scale_limit=random_scale_limit, p=0.5),
                     A.SafeRotate(
                         limit=random_rotate_limit,
                         border_mode=cv.BORDER_CONSTANT,
@@ -118,7 +117,7 @@ class IAMImageTransforms:
                     A.Normalize(*normalize_params),
                 ]
             )
-        else:  # forms by default
+        elif self.parse_method == "form":
             self.train_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
@@ -145,8 +144,10 @@ class IAMImageTransforms:
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
                     A.PadIfNeeded(
-                        padded_h, padded_w, border_mode=cv.BORDER_CONSTANT, value=0
+                        max_img_h, max_img_w, border_mode=cv.BORDER_CONSTANT, value=0
                     ),
                     A.Normalize(*normalize_params),
                 ]
             )
+        else:
+            raise ValueError(f"{self.parse_method} is not a valid parse method.")

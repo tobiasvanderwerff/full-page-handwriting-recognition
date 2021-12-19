@@ -16,11 +16,7 @@ from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import Dataset
 from PIL import Image
 
-from util import (
-    read_xml,
-    find_child_by_tag,
-    set_seed,
-)
+from util import read_xml, find_child_by_tag, set_seed
 from transforms import IAMImageTransforms
 
 

@@ -112,21 +112,17 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
 
     @staticmethod
     def add_model_specific_args(parent_parser):
+        # fmt: off
         parser = parent_parser.add_argument_group("LitFullPageHTREncoderDecoder")
-        parser.add_argument(
-            "--encoder",
-            type=str,
-            choices=["resnet18", "resnet34", "resnet50"],
-            default="resnet18",
-        )
+        parser.add_argument("--encoder", type=str, default="resnet18",
+                            choices=["resnet18", "resnet34", "resnet50"])
         parser.add_argument("--d_model", type=int, default=260)
         parser.add_argument("--num_layers", type=int, default=6)
         parser.add_argument("--nhead", type=int, default=4)
         parser.add_argument("--dim_feedforward", type=int, default=1024)
-        parser.add_argument(
-            "--drop_enc", type=float, default=0.5, help="Encoder dropout."
-        )
-        parser.add_argument(
-            "--drop_dec", type=float, default=0.5, help="Decoder dropout."
-        )
+        parser.add_argument("--drop_enc", type=float, default=0.5,
+                            help="Encoder dropout.")
+        parser.add_argument("--drop_dec", type=float, default=0.5,
+                            help="Decoder dropout.")
         return parent_parser
+        # fmt: on
