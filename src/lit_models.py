@@ -22,6 +22,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
     def __init__(
         self,
         label_encoder: LabelEncoder,
+        learning_rate: float = 0.0002,
         max_seq_len: int = 500,
         d_model: int = 260,
         num_layers: int = 6,
@@ -36,11 +37,11 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         super().__init__()
 
         # Save hyperparameters.
-        opt_params = FullPageHTREncoderDecoder.full_page_htr_optimizer_params()
+        self.learning_rate = learning_rate
         if params_to_log is not None:
             self.save_hyperparameters(params_to_log)
-        self.save_hyperparameters(opt_params)
         self.save_hyperparameters(
+            "learning_rate",
             "d_model",
             "num_layers",
             "nhead",
@@ -104,16 +105,13 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        # By default use the optimizer parameters specified in Singh et al. (2021).
-        params = FullPageHTREncoderDecoder.full_page_htr_optimizer_params()
-        optimizer_name = params.pop("optimizer_name")
-        optimizer = getattr(optim, optimizer_name)(self.parameters(), **params)
-        return optimizer
+        return optim.AdamW(self.parameters(), lr=self.learning_rate)
 
     @staticmethod
     def add_model_specific_args(parent_parser):
         # fmt: off
         parser = parent_parser.add_argument_group("LitFullPageHTREncoderDecoder")
+        parser.add_argument("--learning_rate", type=float, default=0.0002)
         parser.add_argument("--encoder", type=str, default="resnet18",
                             choices=["resnet18", "resnet34", "resnet50"])
         parser.add_argument("--d_model", type=int, default=260)
