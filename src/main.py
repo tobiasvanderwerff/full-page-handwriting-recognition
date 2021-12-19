@@ -23,7 +23,11 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.plugins import DDPPlugin
 
 LOGGING_DIR = "lightning_logs/"
-LOGMODELPREDICTIONS_TO_SAMPLE = 8
+PREDICTIONS_TO_LOG = {
+    "word": 8,
+    "line": 6,
+    "form": 1,
+}
 
 
 def main(args):
@@ -178,10 +182,10 @@ def main(args):
                         Subset(
                             ds_val,
                             random.sample(
-                                range(len(ds_val)), LOGMODELPREDICTIONS_TO_SAMPLE
+                                range(len(ds_val)), PREDICTIONS_TO_LOG[args.data_format]
                             ),
                         ),
-                        batch_size=LOGMODELPREDICTIONS_TO_SAMPLE,
+                        batch_size=PREDICTIONS_TO_LOG[args.data_format],
                         shuffle=False,
                         collate_fn=collate_fn,
                         num_workers=args.num_workers,
@@ -195,10 +199,11 @@ def main(args):
                         Subset(
                             ds_train,
                             random.sample(
-                                range(len(ds_train)), LOGMODELPREDICTIONS_TO_SAMPLE
+                                range(len(ds_train)),
+                                PREDICTIONS_TO_LOG[args.data_format]
                             ),
                         ),
-                        batch_size=LOGMODELPREDICTIONS_TO_SAMPLE,
+                        batch_size=PREDICTIONS_TO_LOG[args.data_format],
                         shuffle=False,
                         collate_fn=collate_fn,
                         num_workers=args.num_workers,

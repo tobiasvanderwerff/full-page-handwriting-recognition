@@ -110,10 +110,10 @@ class IAMImageTransforms:
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
                     A.RandomScale(scale_limit=random_scale_limit, p=0.5),
-                    # SafeRotate is preferred over Rotate because it does not cut off text
-                    # when it extends out of the frame after rotation.
+                    # SafeRotate is preferred over Rotate because it does not cut off
+                    # text when it extends out of the frame after rotation.
                     A.SafeRotate(
-                        limit=random_scale_limit,
+                        limit=random_rotate_limit,
                         border_mode=cv.BORDER_CONSTANT,
                         value=0,
                     ),
