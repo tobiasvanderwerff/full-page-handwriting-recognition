@@ -381,8 +381,8 @@ class IAMSyntheticDataGenerator(Dataset):
         iam_root: Union[str, Path],
         label_encoder: Optional[LabelEncoder] = None,
         transforms: Optional[A.Compose] = None,
-        words_per_line: Tuple[int, int] = (5, 13),
-        lines_per_form: Tuple[int, int] = (3, 9),
+        words_per_line: Tuple[int, int] = (4, 10),
+        lines_per_form: Tuple[int, int] = (3, 10),
         px_between_lines: Tuple[int, int] = (50, 100),
         px_between_words: int = 50,
         sample_form: bool = False,
@@ -567,6 +567,14 @@ class IAMSyntheticDataGenerator(Dataset):
         # Sample line images.
         for i in range(n_lines_to_sample):
             line_img, line_target = self.generate_line(n_words_to_sample)
+            h, w = line_img.shape
+            if h > IAMDataset.MAX_FORM_HEIGHT or w > IAMDataset.MAX_FORM_WIDTH:
+                # It is possible that the generated synthetic form exceeds the
+                # maximum width. This is because the generated images are based on
+                # a specified number of words per line. Depending on the length of
+                # the words, the generated image may be too wide. If this is the
+                # case, simply generate another form.
+                return self.generate_form()  # generate another form
             lines.append(line_img)
             target += line_target + "\n"
         form_w = max(l.shape[1] for l in lines)
