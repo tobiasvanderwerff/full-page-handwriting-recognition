@@ -17,7 +17,7 @@ After downloading IAM, install the requirements:
 pip install -r requirements.txt
 ```
 
-Now run the main script, e.g.
+Now run the main script to train a model, e.g.
 
 ```shell
 python src/main.py --data_dir /path/to/IAM --data_format form --max_epochs 3 --use_cpu
@@ -33,6 +33,16 @@ Besides training on form images from the IAM dataset, the model can alternativel
 trained on line or word images, which are included in the IAM dataset.  This makes
 training (or even loading) a model easier, since these images are much smaller. Specify
 this using the `--data_format {form,line,word}` flag.
+
+To run inference on a trained model using your own images, use the following command:
+
+```shell
+python src/inference.py --img_path /path/to/img --model_path /path/to/model --data_format {word,line,form}
+```
+
+This means the model at `--model_path` will be loaded and applied to the image at
+`--img_path`. The `--data_format` argument is determined by the data format you used to
+train your model.
 
 For more command line options, see `main.py`, or run `python main.py -h` for a list of
 all options.

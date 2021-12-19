@@ -52,7 +52,7 @@ class IAMImageTransforms:
 
     max_img_size: Tuple[int, int]  # (h, w)
     parse_method: str
-    scale: int = (
+    scale: float = (
         0.5  # assuming A4 paper, this gives ~140 DPI (see Singh et al. p. 8, section 4)
     )
     random_scale_limit: float = 0.1
