@@ -442,7 +442,7 @@ class IAMSyntheticDataGenerator(Dataset):
         self.rng = np.random.default_rng(seed)
 
     def sample_image(self) -> Tuple[np.ndarray, str]:
-        idx = random.randint(0, len(self.images))
+        idx = random.randint(0, len(self.images) - 1)
         img, target = self.images[idx]
         target = "".join(self.images.label_enc.inverse_transform(target))
         return img, target
