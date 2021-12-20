@@ -35,7 +35,7 @@ def randomly_displace_and_pad(
     return res
 
 
-def dpi_adjusting(img: np.ndarray, scale: int, **kwargs) -> np.ndarray:
+def dpi_adjusting(img: np.ndarray, scale: float, **kwargs) -> np.ndarray:
     height, width = img.shape[:2]
     new_height, new_width = math.ceil(height * scale), math.ceil(width * scale)
     return cv.resize(img, (new_width, new_height))
