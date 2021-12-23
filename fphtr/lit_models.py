@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Union
 
-from models import FullPageHTREncoderDecoder
+from fphtr.models import FullPageHTREncoderDecoder
 
 import torch.optim as optim
 import pytorch_lightning as pl

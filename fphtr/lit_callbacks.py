@@ -3,7 +3,7 @@ from typing import Tuple, Optional
 
 import torch
 
-from util import matplotlib_imshow
+from fphtr.util import matplotlib_imshow
 
 import pytorch_lightning as pl
 import matplotlib.pyplot as plt
