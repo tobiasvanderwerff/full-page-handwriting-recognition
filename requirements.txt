@@ -1,9 +1,8 @@
-torch>=1.9
+torch
 torchvision
 pytorch-lightning>=1.5.1
 editdistance
 torchmetrics
-
 pandas
 opencv-python
 albumentations
@@ -12,3 +11,6 @@ sklearn
 scikit-learn
 Pillow
 matplotlib
+torchserve
+torch-model-archiver
+torch-workflow-archiver
