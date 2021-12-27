@@ -86,7 +86,7 @@ def prepare_data(
         if (le_dir / "label_encoder.pkl").is_file()
         else le_dir / "label_encoding.txt"
     )
-    label_enc = LabelEncoder(filename=le_path)
+    label_enc = LabelEncoder().read_encoding(le_path)
 
     # Apply image transforms.
     imgs = []

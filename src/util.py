@@ -90,19 +90,11 @@ class LabelEncoder:
     cls_to_idx: Optional[Dict[str, int]]
     n_classes: Optional[int]
 
-    def __init__(
-        self,
-        classes: Optional[Sequence[str]] = None,
-        filename: Optional[Union[str, Path]] = None,
-    ):
+    def __init__(self):
         self.classes = None
         self.idx_to_cls = None
         self.cls_to_idx = None
         self.n_classes = None
-        if filename is not None:
-            self.read_encoding(filename)
-        if classes is not None:
-            self.fit(classes)
 
     def transform(self, classes: Sequence[str]) -> List[int]:
         self.check_is_fitted()
@@ -128,10 +120,10 @@ class LabelEncoder:
     def read_encoding(self, filename: Union[str, Path]):
         if Path(filename).suffix == ".pkl":
             # Label encoding saved as Sklearn LabelEncoder instance.
-            self.read_sklearn_encoding(filename)
+            return self.read_sklearn_encoding(filename)
         else:
             classes = Path(filename).read_text().split("\n")
-            self.fit(classes)
+            return self.fit(classes)
 
     def read_sklearn_encoding(self, filename: Union[str, Path]):
         """
@@ -147,6 +139,7 @@ class LabelEncoder:
         )
         self.fit(classes)
         self.dump(Path(filename).parent)
+        return self
 
     def dump(self, outdir: Union[str, Path]):
         """Dump the encoded labels to a txt file."""

@@ -39,16 +39,17 @@ def main(args):
     )
 
     label_enc = None
-    if args.validate:
+    if args.validate or args.load_model:
         # Load the label encoder for the trained model.
-        le_path_1 = Path(args.validate).parent.parent / "label_encoding.txt"
-        le_path_2 = Path(args.validate).parent.parent / "label_encoder.pkl"
+        model_path = Path(args.validate) if args.validate else Path(args.load_model)
+        le_path_1 = model_path.parent.parent / "label_encoding.txt"
+        le_path_2 = model_path.parent.parent / "label_encoder.pkl"
         assert le_path_1.is_file() or le_path_2.is_file(), (
             f"Label encoder file not found at {le_path_1} or {le_path_2}. "
             f"Make sure 'label_encoding.txt' exists in the lightning_logs directory."
         )
         le_path = le_path_2 if le_path_2.is_file() else le_path_1
-        label_enc = LabelEncoder(filename=le_path)
+        label_enc = LabelEncoder().read_encoding(le_path)
 
     ds = IAMDataset(args.data_dir, args.data_format, "train", label_enc=label_enc)
 
@@ -125,14 +126,13 @@ def main(args):
         worker_init_fn=worker_init_fn,
     )
 
-    if args.validate is not None:
-        assert Path(
-            args.validate
-        ).is_file(), f"{args.validate} does not point to a file."
+    if args.validate or args.load_model:
+        model_path = Path(args.validate) if args.validate else Path(args.load_model)
+        assert Path(model_path).is_file(), f"{model_path} does not point to a file."
         # Load the model. Note that the vocab length and special tokens given below
         # are derived from the saved label encoder associated with the checkpoint.
         model = LitFullPageHTREncoderDecoder.load_from_checkpoint(
-            args.validate,
+            str(model_path),
             label_encoder=ds.label_enc,
         )
     else:
@@ -248,6 +248,9 @@ if __name__ == "__main__":
                               "during training."))
     # parser.add_argument("--label_smoothing", type=float, default=0.0,
     #                     help="Label smoothing epsilon (0.0 indicates no smoothing)")
+    parser.add_argument("--load_model", type=str, default=None,
+                        help="Start training from a saved model, specified by its "
+                             "checkpoint path.")
     parser.add_argument("--validate", type=str, default=None,
                         help="Validate a trained model, specified by its checkpoint "
                              "path.")
