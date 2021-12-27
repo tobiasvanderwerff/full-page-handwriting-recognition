@@ -54,7 +54,13 @@ def main(args):
             # Add the `\n` token to the label encoder (since forms can contain newlines)
             label_enc.add_classes(["\n"])
 
-    ds = IAMDataset(args.data_dir, args.data_format, "train", label_enc=label_enc)
+    ds = IAMDataset(
+        args.data_dir,
+        args.data_format,
+        "train",
+        label_enc=label_enc,
+        only_lowercase=(not args.use_uppercase),
+    )
 
     if n_classes_saved is None:
         n_classes_saved = ds.label_enc.n_classes
@@ -168,6 +174,7 @@ def main(args):
                 # "label_smoothing": args.label_smoothing,
                 "synthetic_augmentation_proba": args.synthetic_augmentation_proba,
                 "gradient_clip_val": args.gradient_clip_val,
+                "only_lowercase": not args.use_uppercase,
                 "loaded_model": args.load_model,
             },
         )
@@ -265,6 +272,9 @@ if __name__ == "__main__":
                         help="Validate a trained model, specified by its checkpoint "
                              "path.")
     parser.add_argument("--use_aachen_splits", action="store_true", default=False)
+    parser.add_argument("--use_uppercase", action="store_true", default=False,
+                        help="Do not convert all target label sequences to lowercase, "
+                             "but maintain the capital letters that are present.")
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--early_stopping_patience", type=int, default=10)
     parser.add_argument("--save_all_checkpoints", action="store_true", default=False)

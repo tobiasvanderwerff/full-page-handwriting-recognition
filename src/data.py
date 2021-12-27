@@ -45,6 +45,7 @@ class IAMDataset(Dataset):
         split: str,
         skip_bad_segmentation: bool = False,
         return_writer_id: bool = False,
+        only_lowercase: bool = True,
         label_enc: Optional[LabelEncoder] = None,
     ):
         super().__init__()
@@ -60,6 +61,7 @@ class IAMDataset(Dataset):
 
         self._split = split
         self._return_writer_id = return_writer_id
+        self.only_lowercase = only_lowercase
         self.root = Path(root)
         self.label_enc = label_enc
         self.parse_method = parse_method
@@ -73,17 +75,24 @@ class IAMDataset(Dataset):
             elif self.parse_method == "line":
                 self.data = self._get_lines(skip_bad_segmentation)
 
-        # Create the label encoder. We convert all ASCII characters to lower case.
+        # Create the label encoder.
         if self.label_enc is None:
             vocab = [self._pad_token, self._sos_token, self._eos_token]
-            vocab += sorted(list(set(("".join(self.data["target"].tolist()).lower()))))
+            s = "".join(self.data["target"].tolist())
+            if self.only_lowercase:
+                s = s.lower()
+            vocab += sorted(list(set(s)))
             self.label_enc = LabelEncoder().fit(vocab)
         if not "target_enc" in self.data.columns:
             self.data.insert(
                 2,
                 "target_enc",
                 self.data["target"].apply(
-                    lambda s: np.array(self.label_enc.transform([c for c in s.lower()]))
+                    lambda s: np.array(
+                        self.label_enc.transform(
+                            [c for c in (s.lower() if self.only_lowercase else s)]
+                        )
+                    )
                 ),
             )
 
@@ -322,6 +331,7 @@ class IAMSyntheticDataGenerator(Dataset):
         px_between_lines: Tuple[int, int] = (25, 100),
         px_between_words: int = 50,
         sample_form: bool = False,
+        only_lowercase: bool = True,
         rng_seed: int = 0,
     ):
         super().__init__()
@@ -333,6 +343,7 @@ class IAMSyntheticDataGenerator(Dataset):
         self.px_between_lines = px_between_lines
         self.px_between_words = px_between_words
         self.sample_form = sample_form
+        self.only_lowercase = only_lowercase
         self.rng_seed = rng_seed
 
         self.images = IAMDataset(
@@ -356,7 +367,11 @@ class IAMSyntheticDataGenerator(Dataset):
         if self.transforms is not None:
             img = self.transforms(image=img)["image"]
         # Encode the target sequence using the label encoder.
-        target_enc = np.array(self.label_encoder.transform([c for c in target.lower()]))
+        target_enc = np.array(
+            self.label_encoder.transform(
+                [c for c in (target.lower() if self.only_lowercase else target)]
+            )
+        )
         return img, target_enc
 
     def __len__(self):
@@ -566,6 +581,7 @@ class IAMDatasetSynthetic(Dataset):
             label_encoder=iam_dataset.label_enc,
             transforms=iam_dataset.transforms,
             sample_form=(True if iam_dataset.parse_method == "form" else False),
+            only_lowercase=iam_dataset.only_lowercase,
         )
 
     def __getitem__(self, idx):
