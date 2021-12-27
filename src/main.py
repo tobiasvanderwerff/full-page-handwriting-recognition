@@ -155,7 +155,8 @@ def main(args):
             drop_enc=args.drop_enc,
             drop_dec=args.drop_dec,
             params_to_log={
-                "batch_size": int(args.num_nodes * args.batch_size),
+                "batch_size": int(args.num_nodes * args.batch_size)
+                * (args.accumulate_grad_batches or 1),
                 "data_format": args.data_format,
                 "seed": args.seed,
                 "splits": ("Aachen" if args.use_aachen_splits else "random"),
