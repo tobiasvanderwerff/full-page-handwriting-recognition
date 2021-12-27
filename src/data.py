@@ -341,7 +341,7 @@ class IAMSyntheticDataGenerator(Dataset):
             "test",
             skip_bad_segmentation=True,
         )
-        if sample_form:
+        if sample_form and "\n" not in self.label_encoder.classes:
             # Add the `\n` token to the label encoder (since forms can contain newlines)
             self.label_encoder.add_classes(["\n"])
         self.images.transforms = None
@@ -376,7 +376,10 @@ class IAMSyntheticDataGenerator(Dataset):
             set_seed(worker_id)
             worker_info = torch.utils.data.get_worker_info()
             dataset = worker_info.dataset  # the dataset copy in this worker process
-            dataset.set_rng(worker_id)
+            if hasattr(dataset, "set_rng"):
+                dataset.set_rng(worker_id)
+            else:  # dataset is instance of `IAMDatasetSynthetic` class
+                dataset.synth_dataset.set_rng(worker_id)
 
         return worker_init_fn
 

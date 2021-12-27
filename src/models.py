@@ -318,6 +318,7 @@ class FullPageHTREncoderDecoder(nn.Module):
         drop_enc: int = 0.5,
         drop_dec: int = 0.5,
         activ_dec: str = "gelu",
+        vocab_len: Optional[int] = None,
     ):
         """
         Model used in Singh et al. (2021). The default hyperparameters are those used
@@ -349,7 +350,7 @@ class FullPageHTREncoderDecoder(nn.Module):
             d_model, model_name=encoder_name, dropout=drop_enc
         )
         self.decoder = FullPageHTRDecoder(
-            vocab_len=label_encoder.n_classes,
+            vocab_len=(vocab_len or label_encoder.n_classes),
             max_seq_len=max_seq_len,
             eos_tkn_idx=eos_tkn_idx,
             sos_tkn_idx=sos_tkn_idx,
@@ -411,6 +412,33 @@ class FullPageHTREncoderDecoder(nn.Module):
         cer = self.cer_metric(preds, targets)
         wer = self.wer_metric(preds, targets)
         return {"char_error_rate": cer, "word_error_rate": wer}
+
+    def set_num_output_classes(self, n_classes: int):
+        """
+        Set number of output classes of the model. This has an effect on the
+        final classification layer and the token embeddings. This is
+        useful for finetuning a trained model with additional output classes.
+        """
+        assert n_classes >= self.decoder.vocab_len, (
+            "Currently, can only add classes, " "not remove them."
+        )
+        print(
+            "Re-initializing the classification layer of the model. This is "
+            "intended behavior if you initalize model training from a trained model."
+        )
+        # Re-initialize classification layer.
+        old_vocab_len = self.decoder.vocab_len
+        self.decoder.vocab_len = n_classes
+        self.decoder.clf = nn.Linear(self.decoder.d_model, n_classes)
+
+        # Add additional token embeddings for the new classes.
+        # NOTE: we are assuming here that the first n embeddings from the old model
+        # are still indexed in the same way, i.e. the new classes are given indices
+        # starting from index n.
+        new_embs = nn.Embedding(n_classes, self.decoder.d_model)
+        with torch.no_grad():
+            new_embs.weight[:old_vocab_len] = self.decoder.emb.weight
+            self.decoder.emb = new_embs
 
     @staticmethod
     def full_page_htr_optimizer_params() -> Dict[str, Any]:

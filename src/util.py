@@ -122,7 +122,16 @@ class LabelEncoder:
             # Label encoding saved as Sklearn LabelEncoder instance.
             return self.read_sklearn_encoding(filename)
         else:
-            classes = Path(filename).read_text().split("\n")
+            i = 0
+            classes = []
+            saved_str = Path(filename).read_text()
+            while i < len(saved_str):
+                # This is a bit of a roundabout way to read the saved label encoding,
+                # but it is necessary in order to read special characters (like `\n`)
+                # correctly.
+                c = saved_str[i]
+                classes.append(c)
+                i += 2
             return self.fit(classes)
 
     def read_sklearn_encoding(self, filename: Union[str, Path]):
@@ -143,11 +152,7 @@ class LabelEncoder:
 
     def dump(self, outdir: Union[str, Path]):
         """Dump the encoded labels to a txt file."""
-        out = ""
-        for i, cls in self.idx_to_cls.items():
-            out += cls
-            if i != self.n_classes - 1:
-                out += "\n"
+        out = "\n".join(cls for cls in self.classes)
         (Path(outdir) / "label_encoding.txt").write_text(out)
 
     def check_is_fitted(self):

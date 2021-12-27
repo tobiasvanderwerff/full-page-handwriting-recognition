@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import pickle
 import random
 import math
 from copy import copy
@@ -14,7 +13,6 @@ from data import IAMDataset, IAMDatasetSynthetic, IAMSyntheticDataGenerator
 from util import LitProgressBar, LabelEncoder
 
 import torch
-import pandas as pd
 from torch.utils.data import DataLoader, Subset
 from pytorch_lightning import seed_everything, Trainer
 from pytorch_lightning import loggers as pl_loggers
@@ -39,6 +37,7 @@ def main(args):
     )
 
     label_enc = None
+    n_classes_saved = None
     if args.validate or args.load_model:
         # Load the label encoder for the trained model.
         model_path = Path(args.validate) if args.validate else Path(args.load_model)
@@ -50,14 +49,21 @@ def main(args):
         )
         le_path = le_path_2 if le_path_2.is_file() else le_path_1
         label_enc = LabelEncoder().read_encoding(le_path)
+        n_classes_saved = label_enc.n_classes  # num. output classes for the saved model
+        if args.data_format == "form":
+            # Add the `\n` token to the label encoder (since forms can contain newlines)
+            label_enc.add_classes(["\n"])
 
     ds = IAMDataset(args.data_dir, args.data_format, "train", label_enc=label_enc)
+
+    if n_classes_saved is None:
+        n_classes_saved = ds.label_enc.n_classes
 
     if not args.validate:
         # Save the label encoder.
         save_dir = Path(tb_logger.log_dir)
         save_dir.mkdir(exist_ok=True, parents=True)
-        label_enc.dump(save_dir)
+        ds.label_enc.dump(save_dir)
 
     eos_tkn_idx, sos_tkn_idx, pad_tkn_idx = ds.label_enc.transform(
         [ds._eos_token, ds._sos_token, ds._pad_token]
@@ -123,7 +129,6 @@ def main(args):
         collate_fn=collate_fn,
         num_workers=args.num_workers,
         pin_memory=True,
-        worker_init_fn=worker_init_fn,
     )
 
     if args.validate or args.load_model:
@@ -134,7 +139,10 @@ def main(args):
         model = LitFullPageHTREncoderDecoder.load_from_checkpoint(
             str(model_path),
             label_encoder=ds.label_enc,
+            vocab_len=n_classes_saved,
         )
+        if args.load_model:
+            model.model.set_num_output_classes(ds.label_enc.n_classes)
     else:
         model = LitFullPageHTREncoderDecoder(
             label_encoder=ds.label_enc,
@@ -159,6 +167,7 @@ def main(args):
                 # "label_smoothing": args.label_smoothing,
                 "synthetic_augmentation_proba": args.synthetic_augmentation_proba,
                 "gradient_clip_val": args.gradient_clip_val,
+                "loaded_model": args.load_model,
             },
         )
 

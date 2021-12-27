@@ -33,6 +33,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         drop_enc: int = 0.5,
         drop_dec: int = 0.5,
         activ_dec: str = "gelu",
+        vocab_len: Optional[int] = None,  # if not specified len(label_encoder) is used
         params_to_log: Optional[Dict[str, Union[str, float, int]]] = None,
     ):
         super().__init__()
@@ -66,6 +67,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
             drop_enc=drop_enc,
             drop_dec=drop_dec,
             activ_dec=activ_dec,
+            vocab_len=vocab_len,
         )
 
         self.all_logits = None
