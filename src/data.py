@@ -2,9 +2,8 @@ import xml.etree.ElementTree as ET
 import html
 import pickle
 import random
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union, Tuple, Dict, Sequence, Optional, List, Any
+from typing import Union, Tuple, Dict, Sequence, Optional
 
 import pandas as pd
 import cv2 as cv
@@ -12,11 +11,10 @@ import albumentations as A
 import torch
 import numpy as np
 from torch import Tensor
-from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import Dataset
 from PIL import Image
 
-from util import read_xml, find_child_by_tag, set_seed
+from util import read_xml, find_child_by_tag, set_seed, TemporalStack, LabelEncoder
 from transforms import IAMImageTransforms
 
 
@@ -45,7 +43,6 @@ class IAMDataset(Dataset):
         root: Union[Path, str],
         parse_method: str,
         split: str,
-        use_cache: bool = False,
         skip_bad_segmentation: bool = False,
         return_writer_id: bool = False,
         label_enc: Optional[LabelEncoder] = None,
@@ -67,9 +64,6 @@ class IAMDataset(Dataset):
         self.label_enc = label_enc
         self.parse_method = parse_method
 
-        if use_cache:
-            self._check_for_cache()
-
         # Process the data.
         if not hasattr(self, "data"):
             if self.parse_method == "form":
@@ -89,14 +83,11 @@ class IAMDataset(Dataset):
                 2,
                 "target_enc",
                 self.data["target"].apply(
-                    lambda s: self.label_enc.transform([c for c in s.lower()])
+                    lambda s: np.array(self.label_enc.transform([c for c in s.lower()]))
                 ),
             )
 
         self.transforms = self._get_transforms(split)
-
-        if use_cache:
-            self._cache_data()
 
     def __len__(self):
         return len(self.data)
@@ -119,7 +110,7 @@ class IAMDataset(Dataset):
 
     @property
     def vocab(self):
-        return self.label_enc.classes_.tolist()
+        return self.label_enc.classes
 
     @staticmethod
     def collate_fn(
@@ -174,27 +165,6 @@ class IAMDataset(Dataset):
             return transforms.train_trnsf
         elif split == "test" or split == "val":
             return transforms.test_trnsf
-
-    def _check_for_cache(self, cache_path="cache/"):
-        """Check for cached files and load them if available."""
-        df_path = Path(cache_path) / f"IAM-{self.parse_method}-df.pkl"
-        le_path = Path(cache_path) / f"IAM-{self.parse_method}-labelenc.pkl"
-        if df_path.is_file():
-            self.data = pd.read_pickle(df_path)
-        if le_path.is_file():
-            self.label_enc = pd.read_pickle(le_path)
-
-    def _cache_data(self, cache_path="cache/") -> None:
-        """Cache the dataframe containing the data and the label encoder."""
-        cache_dir = Path(cache_path)
-        cache_dir.mkdir(exist_ok=True)
-        df_path = cache_dir / f"IAM-{self.parse_method}-df.pkl"
-        le_path = cache_dir / f"IAM-{self.parse_method}-labelenc.pkl"
-        if not df_path.is_file():
-            self.data.to_pickle(df_path)
-        if not le_path.is_file():
-            with open(le_path, "wb") as f:
-                pickle.dump(self.label_enc, f)
 
     def statistics(self) -> Dict[str, float]:
         tmp = self.transforms
@@ -332,35 +302,6 @@ class IAMDataset(Dataset):
         return None
 
 
-@dataclass
-class TemporalStack:
-    """A stack where each item on the stack has an associated age."""
-
-    @dataclass
-    class StackItem:
-        value: Any
-        age: int = 0
-
-    items: List[StackItem] = field(default_factory=list)
-
-    def time_step(self):
-        # Increment age by 1 for each item on the stack.
-        for item in self.items:
-            item.age += 1
-
-    def add_item(self, x: Any):
-        self.items.append(self.StackItem(x))
-
-    def is_empty(self):
-        return len(self) == 0
-
-    def pop(self):
-        return self.items.pop().value
-
-    def __len__(self):
-        return len(self.items)
-
-
 class IAMSyntheticDataGenerator(Dataset):
     """
     Data generator that creates synthetic line/form images by stitching together word
@@ -398,9 +339,11 @@ class IAMSyntheticDataGenerator(Dataset):
             iam_root,
             "word",
             "test",
-            use_cache=False,
             skip_bad_segmentation=True,
         )
+        if sample_form:
+            # Add the `\n` token to the label encoder (since forms can contain newlines)
+            self.label_encoder.add_classes(["\n"])
         self.images.transforms = None
         self.rng = np.random.default_rng(rng_seed)
 
@@ -413,7 +356,7 @@ class IAMSyntheticDataGenerator(Dataset):
         if self.transforms is not None:
             img = self.transforms(image=img)["image"]
         # Encode the target sequence using the label encoder.
-        target_enc = self.label_encoder.transform([c for c in target.lower()])
+        target_enc = np.array(self.label_encoder.transform([c for c in target.lower()]))
         return img, target_enc
 
     def __len__(self):

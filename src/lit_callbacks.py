@@ -3,12 +3,11 @@ from typing import Tuple, Optional
 
 import torch
 
-from util import matplotlib_imshow
+from util import matplotlib_imshow, LabelEncoder
 
 import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 from pytorch_lightning.callbacks import Callback
-from sklearn.preprocessing import LabelEncoder
 
 
 class LogWorstPredictions(Callback):
@@ -23,7 +22,8 @@ class LogWorstPredictions(Callback):
     def on_validation_epoch_end(
         self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
     ):
-        pass
+        if pl_module.all_logits is None or pl_module.all_targets is None:
+            ...
         # TODO
 
 
@@ -37,7 +37,7 @@ class LogModelPredictions(Callback):
 
     def __init__(
         self,
-        label_encoder: "LabelEncoder",
+        label_encoder: LabelEncoder,
         val_batch: Tuple[torch.Tensor, torch.Tensor],
         use_gpu: bool = True,
         data_format: str = "word",

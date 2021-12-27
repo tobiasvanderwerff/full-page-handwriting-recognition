@@ -1,7 +1,8 @@
+from util import LabelEncoder
+
 import editdistance
 from torch import Tensor
 from torchmetrics import Metric
-from sklearn.preprocessing import LabelEncoder
 
 
 class CharacterErrorRate(Metric):
@@ -79,9 +80,7 @@ class WordErrorRate(Metric):
         """
         assert preds.ndim == target.ndim
 
-        eos_tkn_idx, sos_tkn_idx = list(
-            self.label_encoder.transform(["<EOS>", "<SOS>"])
-        )
+        eos_tkn_idx, sos_tkn_idx = self.label_encoder.transform(["<EOS>", "<SOS>"])
 
         if (preds[:, 0] == sos_tkn_idx).all():  # this should normally be the case
             preds = preds[:, 1:]
@@ -93,8 +92,8 @@ class WordErrorRate(Metric):
             eos_idx_p, eos_idx_t = eos_idxs_prd[i], eos_idxs_tgt[i]
             p = (p[:eos_idx_p] if eos_idx_p else p).flatten().tolist()
             t = (t[:eos_idx_t] if eos_idx_t else t).flatten().tolist()
-            p_words = "".join(list(self.label_encoder.inverse_transform(p))).split()
-            t_words = "".join(list(self.label_encoder.inverse_transform(t))).split()
+            p_words = "".join(self.label_encoder.inverse_transform(p)).split()
+            t_words = "".join(self.label_encoder.inverse_transform(t)).split()
             editd = editdistance.eval(p_words, t_words)
 
             self.edits += editd

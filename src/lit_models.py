@@ -1,11 +1,12 @@
 from typing import Optional, Dict, Union
 
 from models import FullPageHTREncoderDecoder
+from util import LabelEncoder
 
+import torch
 import torch.optim as optim
 import pytorch_lightning as pl
 from torch import Tensor
-from sklearn.preprocessing import LabelEncoder
 
 
 class LitFullPageHTREncoderDecoder(pl.LightningModule):
@@ -67,6 +68,9 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
             activ_dec=activ_dec,
         )
 
+        self.all_logits = None
+        self.all_targets = None
+
     @property
     def encoder(self):
         return self.model.encoder
@@ -102,7 +106,13 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         # different models.
         self.log("hp_metric", metrics["char_error_rate"])
 
-        return loss
+        # return loss
+        return {"logits": logits, "targets": targets}
+
+    # def validation_epoch_end(self, validation_step_outputs):
+    #     """Aggregate logits and targets, for the purpose of later callback logic."""
+    #     self.all_logits = torch.cat(validation_step_outputs["logits"], 0)
+    #     self.all_targets = torch.cat(validation_step_outputs["targets"], 0)
 
     def configure_optimizers(self):
         return optim.AdamW(self.parameters(), lr=self.learning_rate)

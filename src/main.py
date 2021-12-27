@@ -10,8 +10,8 @@ from functools import partial
 
 from lit_models import LitFullPageHTREncoderDecoder
 from lit_callbacks import LogModelPredictions
-from data import IAMDataset, IAMDatasetSynthetic
-from util import LitProgressBar
+from data import IAMDataset, IAMDatasetSynthetic, IAMSyntheticDataGenerator
+from util import LitProgressBar, LabelEncoder
 
 import torch
 import pandas as pd
@@ -41,29 +41,26 @@ def main(args):
     label_enc = None
     if args.validate:
         # Load the label encoder for the trained model.
-        le_path = Path(args.validate).parent.parent / "label_encoder.pkl"
-        assert le_path.is_file(), (
-            f"Label encoder file not found at {le_path}. "
-            f"Make sure 'label_encoder.pkl' exists in the lightning_logs directory."
+        le_path_1 = Path(args.validate).parent.parent / "label_encoding.txt"
+        le_path_2 = Path(args.validate).parent.parent / "label_encoder.pkl"
+        assert le_path_1.is_file() or le_path_2.is_file(), (
+            f"Label encoder file not found at {le_path_1} or {le_path_2}. "
+            f"Make sure 'label_encoding.txt' exists in the lightning_logs directory."
         )
-        label_enc = pd.read_pickle(le_path)
+        le_path = le_path_2 if le_path_2.is_file() else le_path_1
+        label_enc = LabelEncoder(filename=le_path)
 
-    ds = IAMDataset(
-        args.data_dir, args.data_format, "train", use_cache=False, label_enc=label_enc
-    )
+    ds = IAMDataset(args.data_dir, args.data_format, "train", label_enc=label_enc)
 
     if not args.validate:
         # Save the label encoder.
         save_dir = Path(tb_logger.log_dir)
         save_dir.mkdir(exist_ok=True, parents=True)
-        le_path = save_dir / "label_encoder.pkl"
-        if not le_path.is_file():
-            with open(le_path, "wb") as f:
-                pickle.dump(ds.label_enc, f)
+        label_enc.dump(save_dir)
 
     eos_tkn_idx, sos_tkn_idx, pad_tkn_idx = ds.label_enc.transform(
         [ds._eos_token, ds._sos_token, ds._pad_token]
-    ).tolist()
+    )
     collate_fn = partial(
         IAMDataset.collate_fn, pad_val=pad_tkn_idx, eos_tkn_idx=eos_tkn_idx
     )
@@ -101,10 +98,12 @@ def main(args):
         ds_val.dataset = copy(ds)
         ds_val.dataset.set_transforms_for_split("val")
 
+    worker_init_fn = None
     if args.synthetic_augmentation_proba > 0.0:
         ds_train = IAMDatasetSynthetic(
             ds_train, synth_prob=args.synthetic_augmentation_proba
         )
+        worker_init_fn = IAMSyntheticDataGenerator.get_worker_init_fn()
 
     # Initialize dataloaders.
     dl_train = DataLoader(
@@ -114,6 +113,7 @@ def main(args):
         collate_fn=collate_fn,
         num_workers=args.num_workers,
         pin_memory=True,
+        worker_init_fn=worker_init_fn,
     )
     dl_val = DataLoader(
         ds_val,
@@ -122,6 +122,7 @@ def main(args):
         collate_fn=collate_fn,
         num_workers=args.num_workers,
         pin_memory=True,
+        worker_init_fn=worker_init_fn,
     )
 
     if args.validate is not None:

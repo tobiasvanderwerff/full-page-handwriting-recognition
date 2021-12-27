@@ -7,11 +7,11 @@ import math
 from typing import Dict, Any, Tuple, Optional, Union, Callable
 
 from metrics import CharacterErrorRate, WordErrorRate
+from util import LabelEncoder
 
 import torch
 import torch.nn as nn
 import torchvision
-from sklearn.preprocessing import LabelEncoder
 from torch import Tensor
 
 
@@ -324,7 +324,7 @@ class FullPageHTREncoderDecoder(nn.Module):
         in the paper, whenever they were available.
 
         Args:
-            label_encoder (LabelEncoder): Sklearn label encoder, which provides an
+            label_encoder (LabelEncoder): Label encoder, which provides an
                 integer encoding of token values.
             d_model (int): the number of expected features in the decoder inputs
             num_layers (int): the number of sub-decoder-layers in the decoder
@@ -342,14 +342,14 @@ class FullPageHTREncoderDecoder(nn.Module):
         # Obtain special token indices.
         eos_tkn_idx, sos_tkn_idx, pad_tkn_idx = label_encoder.transform(
             ["<EOS>", "<SOS>", "<PAD>"]
-        ).tolist()
+        )
 
         # Initialize encoder and decoder.
         self.encoder = FullPageHTREncoder(
             d_model, model_name=encoder_name, dropout=drop_enc
         )
         self.decoder = FullPageHTRDecoder(
-            vocab_len=len(label_encoder.classes_.tolist()),
+            vocab_len=label_encoder.n_classes,
             max_seq_len=max_seq_len,
             eos_tkn_idx=eos_tkn_idx,
             sos_tkn_idx=sos_tkn_idx,
