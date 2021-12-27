@@ -62,7 +62,7 @@ This will provide a localhost link to the Tensorboard dashboard.
 Additionally, this repo includes an implementation of one of the synthetic data
 augmentation schemes used in the paper, namely combining individual words from IAM
 to create new line or form images. Below are two examples of generated line
-images.
+images (for more examples, check out the notebook `synthetic_data_augmentation.ipynb`).
 
 
 ![synthetic_img_example_1](img/synthetic_line_example_1.png)

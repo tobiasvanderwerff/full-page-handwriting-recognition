@@ -319,7 +319,7 @@ class IAMSyntheticDataGenerator(Dataset):
         transforms: Optional[A.Compose] = None,
         words_per_line: Tuple[int, int] = (4, 10),
         lines_per_form: Tuple[int, int] = (3, 10),
-        px_between_lines: Tuple[int, int] = (50, 100),
+        px_between_lines: Tuple[int, int] = (25, 100),
         px_between_words: int = 50,
         sample_form: bool = False,
         rng_seed: int = 0,
@@ -421,10 +421,12 @@ class IAMSyntheticDataGenerator(Dataset):
                 img, tgt = self.sample_image()
             h, w = img.shape
 
-            # A basic heuristic to avoid strange looking sentences.
+            # Basic heuristics to avoid some strange looking sentences.
             if (
-                last_target in self.PUNCTUATION and tgt in self.PUNCTUATION
-            ) or last_target == tgt:
+                (last_target in self.PUNCTUATION and tgt in self.PUNCTUATION)
+                or (tgt in self.PUNCTUATION and n_sampled_words == 0)
+                or (last_target == tgt)
+            ):
                 continue
 
             if tgt in ['"', "'"] and not pop_the_stack:
@@ -506,7 +508,7 @@ class IAMSyntheticDataGenerator(Dataset):
         for i in range(n_lines_to_sample):
             line_img, line_target = self.generate_line(n_words_to_sample)
             h, w = line_img.shape
-            if h > IAMDataset.MAX_FORM_HEIGHT or w > IAMDataset.MAX_FORM_WIDTH:
+            if w > IAMDataset.MAX_FORM_WIDTH:
                 # It is possible that the generated synthetic form exceeds the
                 # maximum width. This is because the generated images are based on
                 # a specified number of words per line. Depending on the length of
@@ -517,6 +519,11 @@ class IAMSyntheticDataGenerator(Dataset):
             target += line_target + "\n"
         form_w = max(l.shape[1] for l in lines)
         form_h = sum(l.shape[0] + px_between_lines for l in lines)
+        if form_h > IAMDataset.MAX_FORM_HEIGHT:
+            print(
+                "Generated form height exceeds maximum height. Generating a new form."
+            )
+            return self.generate_form()  # generate another form
         form = np.ones((form_h, form_w), dtype=lines[0].dtype) * 255
 
         # Concatenate the lines vertically.
