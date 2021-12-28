@@ -113,3 +113,4 @@ class LogModelPredictions(Callback):
         tensorboard.add_figure(
             f"{split}: predictions vs targets", fig, trainer.global_step
         )
+        plt.close(fig)
