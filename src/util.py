@@ -122,16 +122,20 @@ class LabelEncoder:
             # Label encoding saved as Sklearn LabelEncoder instance.
             return self.read_sklearn_encoding(filename)
         else:
-            i = 0
             classes = []
             saved_str = Path(filename).read_text()
+            i = 0
             while i < len(saved_str):
                 # This is a bit of a roundabout way to read the saved label encoding,
                 # but it is necessary in order to read special characters (like `\n`)
                 # correctly.
                 c = saved_str[i]
+                i += 1
+                while i < len(saved_str) and saved_str[i] != "\n":
+                    c += saved_str[i]
+                    i += 1
                 classes.append(c)
-                i += 2
+                i += 1
             return self.fit(classes)
 
     def read_sklearn_encoding(self, filename: Union[str, Path]):
