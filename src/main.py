@@ -152,6 +152,7 @@ def main(args):
     else:
         model = LitFullPageHTREncoderDecoder(
             label_encoder=ds.label_enc,
+            learning_rate=args.learning_rate,
             max_seq_len=IAMDataset.MAX_SEQ_LENS[args.data_format],
             d_model=args.d_model,
             num_layers=args.num_layers,
