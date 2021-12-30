@@ -55,35 +55,6 @@ def matplotlib_imshow(img: torch.Tensor, one_channel=True):
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
 
-@dataclass
-class TemporalStack:
-    """A stack where each item on the stack has an associated age."""
-
-    @dataclass
-    class StackItem:
-        value: Any
-        age: int = 0
-
-    items: List[StackItem] = field(default_factory=list)
-
-    def time_step(self):
-        # Increment age by 1 for each item on the stack.
-        for item in self.items:
-            item.age += 1
-
-    def add_item(self, x: Any):
-        self.items.append(self.StackItem(x))
-
-    def is_empty(self):
-        return len(self) == 0
-
-    def pop(self):
-        return self.items.pop().value
-
-    def __len__(self):
-        return len(self.items)
-
-
 class LabelEncoder:
     classes: Optional[List[str]]
     idx_to_cls: Optional[Dict[int, str]]
