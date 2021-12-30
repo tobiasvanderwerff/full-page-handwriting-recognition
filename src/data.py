@@ -502,7 +502,7 @@ class IAMSyntheticDataGenerator(Dataset):
             - list of line images
             - transcription for all lines combined
         """
-        curr_pos, sampled_words, sampled_lines = 0, 0, 0
+        curr_pos, sampled_words = 0, 0
         imgs, targets, lines = [], [], []
         target_str, last_target = "", ""
 
@@ -517,7 +517,7 @@ class IAMSyntheticDataGenerator(Dataset):
                     break
                 h, w = img.shape
 
-                if curr_pos + w >= max_line_width:
+                if curr_pos + w > max_line_width:
                     # Concatenate the sampled images into a line.
                     line = self.concatenate_line(imgs, targets, max_line_width)
 
@@ -527,7 +527,6 @@ class IAMSyntheticDataGenerator(Dataset):
                     lines.append(line)
                     target_str += "\n"
                     last_target = "\n"
-                    sampled_lines += 1
                     curr_pos = 0
                     imgs, targets = [], []
 
@@ -552,9 +551,10 @@ class IAMSyntheticDataGenerator(Dataset):
 
                 sampled_words += 1
                 last_target = tgt
-                curr_pos += w
-                if tgt not in self.PUNCTUATION:
-                    curr_pos += self.px_between_words
+                if tgt in self.PUNCTUATION:
+                    # Reduce horizontal spacing for punctuation tokens.
+                    curr_pos = max(0, curr_pos - self.px_between_words)
+                curr_pos += w + self.px_between_words
         if imgs and targets:
             # Concatenate the remaining images into a new line.
             line = self.concatenate_line(imgs, targets, max_line_width)
