@@ -176,7 +176,9 @@ class IAMDataset(Dataset):
             max_img_h = (self.data["bb_y_end"] - self.data["bb_y_start"]).max()
         else:  # word or line
             max_img_h = self.MAX_FORM_HEIGHT
-        transforms = IAMImageTransforms((max_img_h, max_img_w), self.parse_method)
+        transforms = IAMImageTransforms(
+            (max_img_h, max_img_w), self.parse_method, (IAMDataset.MEAN, IAMDataset.VAR)
+        )
 
         if split == "train":
             return transforms.train_trnsf
