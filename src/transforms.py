@@ -132,21 +132,21 @@ class IAMImageTransforms:
                     A.RandomBrightnessContrast(),
                     A.Perspective(scale=(0.03, 0.05)),
                     A.GaussNoise(),
+                    A.Normalize(*normalize_params),
                     A.Lambda(
                         image=partial(
                             randomly_displace_and_pad, padded_size=(padded_h, padded_w)
                         )
                     ),
-                    A.Normalize(*normalize_params),
                 ]
             )
             self.test_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
+                    A.Normalize(*normalize_params),
                     A.PadIfNeeded(
                         max_img_h, max_img_w, border_mode=cv.BORDER_CONSTANT, value=0
                     ),
-                    A.Normalize(*normalize_params),
                 ]
             )
         else:
