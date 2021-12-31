@@ -363,6 +363,11 @@ class IAMSyntheticDataGenerator(Dataset):
             "test",
             skip_bad_segmentation=True,
         )
+        self.max_height = IAMDataset.MAX_FORM_HEIGHT
+        if self.sample_form:
+            self.max_height = (
+                self.iam_words.data["bb_y_end"] - self.iam_words.data["bb_y_start"]
+            ).max()
         if sample_form and "\n" not in self.label_encoder.classes:
             # Add the `\n` token to the label encoder (since forms can contain newlines)
             self.label_encoder.add_classes(["\n"])
@@ -397,8 +402,6 @@ class IAMSyntheticDataGenerator(Dataset):
         return img, target_enc
 
     def generate_line(self) -> Tuple[np.ndarray, str]:
-        # TODO: for sampling lines, the settings for e.g. words per sequence
-        #  propbably need to be slighlty different, i.e. shorter sequences.
         words_to_sample = self.rng.integers(*self.words_per_line)
         line_width = self.rng.integers(*self.line_width)
         return self.sample_lines(words_to_sample, line_width, sample_one_line=True)
@@ -415,7 +418,7 @@ class IAMSyntheticDataGenerator(Dataset):
         # Concatenate the lines vertically.
         form_w = max(l.shape[1] for l in lines)
         form_h = sum(l.shape[0] + px_between_lines for l in lines)
-        if form_h > IAMDataset.MAX_FORM_HEIGHT:
+        if form_h > self.max_height:
             print(
                 "Generated form height exceeds maximum height. Generating a new form."
             )
