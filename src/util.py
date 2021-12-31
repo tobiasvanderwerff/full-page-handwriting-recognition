@@ -139,5 +139,8 @@ class LitProgressBar(TQDMProgressBar):
     def get_metrics(self, trainer, model):
         # don't show the version number
         items = super().get_metrics(trainer, model)
+        for k in list(items.keys()):
+            if k.startswith("grad"):
+                items.pop(k, None)
         items.pop("v_num", None)
         return items
