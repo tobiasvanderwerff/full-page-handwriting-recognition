@@ -341,6 +341,7 @@ class IAMSyntheticDataGenerator(Dataset):
         sample_form: bool = False,
         only_lowercase: bool = True,
         rng_seed: int = 0,
+        max_height: Optional[int] = None,
     ):
         super().__init__()
         self.iam_root = iam_root
@@ -356,6 +357,7 @@ class IAMSyntheticDataGenerator(Dataset):
         self.sample_form = sample_form
         self.only_lowercase = only_lowercase
         self.rng_seed = rng_seed
+        self.max_height = max_height
 
         self.iam_words = IAMDataset(
             iam_root,
@@ -363,11 +365,8 @@ class IAMSyntheticDataGenerator(Dataset):
             "test",
             skip_bad_segmentation=True,
         )
-        self.max_height = IAMDataset.MAX_FORM_HEIGHT
-        if self.sample_form:
-            self.max_height = (
-                self.iam_words.data["bb_y_end"] - self.iam_words.data["bb_y_start"]
-            ).max()
+        if self.max_height is None:
+            self.max_height = IAMDataset.MAX_FORM_HEIGHT
         if sample_form and "\n" not in self.label_encoder.classes:
             # Add the `\n` token to the label encoder (since forms can contain newlines)
             self.label_encoder.add_classes(["\n"])
@@ -642,6 +641,11 @@ class IAMDatasetSynthetic(Dataset):
             transforms=iam_dataset.transforms,
             sample_form=(True if iam_dataset.parse_method == "form" else False),
             only_lowercase=iam_dataset.only_lowercase,
+            max_height=(
+                (iam_dataset.data["bb_y_end"] - iam_dataset.data["bb_y_start"]).max()
+                if iam_dataset.parse_method == "form"
+                else None
+            ),
             **kwargs,
         )
 
