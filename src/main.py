@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader, Subset
 from pytorch_lightning import seed_everything, Trainer
 from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, ModelSummary
 from pytorch_lightning.plugins import DDPPlugin
 
 LOGGING_DIR = "lightning_logs/"
@@ -188,6 +188,7 @@ def main(args):
         )
 
     callbacks = [
+        ModelSummary(max_depth=2),
         LitProgressBar(),
         ModelCheckpoint(
             save_top_k=(-1 if args.save_all_checkpoints else 3),
