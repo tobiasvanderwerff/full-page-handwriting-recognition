@@ -18,8 +18,11 @@ from transforms import IAMImageTransforms
 
 
 class IAMDataset(Dataset):
+    MEAN = 0.8275
+    VAR = 0.2314
     MAX_FORM_HEIGHT = 3542
     MAX_FORM_WIDTH = 2479
+
     MAX_SEQ_LENS = {
         "word": 55,
         "line": 90,
@@ -181,11 +184,16 @@ class IAMDataset(Dataset):
             return transforms.test_trnsf
 
     def statistics(self) -> Dict[str, float]:
+        assert len(self) > 0
         tmp = self.transforms
         self.transforms = None
-        imgs = torch.cat([img for img, _ in self])
-        mean = torch.mean(imgs).numpy()
-        std = torch.std(imgs).numpy()
+        mean, std, cnt = 0, 0, 0
+        for img, _ in self:
+            mean += np.mean(img)
+            std += np.var(img)
+            cnt += 1
+        mean /= cnt
+        std = np.sqrt(std / cnt)
         self.transforms = tmp
         return {"mean": mean, "std": std}
 
@@ -657,6 +665,7 @@ class IAMDatasetSynthetic(Dataset):
         else:
             # Index the IAM dataset.
             img, target = iam[idx]
+        assert not np.any(np.isnan(img)), img
         return img, target
 
     def __len__(self):

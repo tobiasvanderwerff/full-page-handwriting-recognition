@@ -57,16 +57,14 @@ class IAMImageTransforms:
     )
     random_scale_limit: float = 0.1
     random_rotate_limit: int = 10
-    normalize_params: Tuple[float, float] = (0.5, 0.5)
     train_trnsf: A.Compose = field(init=False)
     test_trnsf: A.Compose = field(init=False)
 
     def __post_init__(self):
-        scale, random_scale_limit, random_rotate_limit, normalize_params = (
+        scale, random_scale_limit, random_rotate_limit = (
             self.scale,
             self.random_scale_limit,
             self.random_rotate_limit,
-            self.normalize_params,
         )
         max_img_h, max_img_w = self.max_img_size
 
@@ -87,13 +85,13 @@ class IAMImageTransforms:
                     ),
                     A.RandomBrightnessContrast(),
                     A.GaussNoise(),
-                    A.Normalize(*normalize_params),
+                    A.Normalize(IAMDataset.MEAN, IAMDataset.VAR),
                 ]
             )
             self.test_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.Normalize(*normalize_params),
+                    A.Normalize(IAMDataset.MEAN, IAMDataset.VAR),
                 ]
             )
         elif self.parse_method == "line":
@@ -108,13 +106,13 @@ class IAMImageTransforms:
                     ),
                     A.RandomBrightnessContrast(),
                     A.GaussNoise(),
-                    A.Normalize(*normalize_params),
+                    A.Normalize(IAMDataset.MEAN, IAMDataset.VAR),
                 ]
             )
             self.test_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.Normalize(*normalize_params),
+                    A.Normalize(IAMDataset.MEAN, IAMDataset.VAR),
                 ]
             )
         elif self.parse_method == "form":
@@ -132,7 +130,7 @@ class IAMImageTransforms:
                     A.RandomBrightnessContrast(),
                     A.Perspective(scale=(0.03, 0.05)),
                     A.GaussNoise(),
-                    A.Normalize(*normalize_params),
+                    A.Normalize(IAMDataset.MEAN, IAMDataset.VAR),
                     A.Lambda(
                         image=partial(
                             randomly_displace_and_pad, padded_size=(padded_h, padded_w)
@@ -143,7 +141,7 @@ class IAMImageTransforms:
             self.test_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.Normalize(*normalize_params),
+                    A.Normalize(IAMDataset.MEAN, IAMDataset.VAR),
                     A.PadIfNeeded(
                         max_img_h, max_img_w, border_mode=cv.BORDER_CONSTANT, value=0
                     ),
