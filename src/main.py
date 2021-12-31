@@ -113,8 +113,15 @@ def main(args):
 
     worker_init_fn = None
     if args.synthetic_augmentation_proba > 0.0:
+        words_per_sequence = (7, 13)
+        if args.data_format == "line":
+            # Change the length of the sampled IAM word sequences for more diversity
+            # in writing style on a single line.
+            words_per_sequence = (2, 5)
         ds_train = IAMDatasetSynthetic(
-            ds_train, synth_prob=args.synthetic_augmentation_proba
+            ds_train,
+            synth_prob=args.synthetic_augmentation_proba,
+            words_per_sequence=words_per_sequence,
         )
         worker_init_fn = IAMSyntheticDataGenerator.get_worker_init_fn()
 

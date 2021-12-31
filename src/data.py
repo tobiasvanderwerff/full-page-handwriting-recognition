@@ -471,10 +471,6 @@ class IAMSyntheticDataGenerator(Dataset):
                 )
             if not (img_path.parent / img_name).is_file():
                 # End of the document.
-                print(
-                    "Reached end of document before sufficient amount of words were "
-                    "sampled. Sampling a new word sequence."
-                )
                 return self.sample_word_image_sequence(words_to_sample)
             # Find the dataset index for the sampled word.
             ix = self.iam_words.id_to_idx.get(Path(img_name).stem)
@@ -628,7 +624,7 @@ class IAMDatasetSynthetic(Dataset):
     synth_dataset: IAMSyntheticDataGenerator
     synth_prob: float
 
-    def __init__(self, iam_dataset: IAMDataset, synth_prob: float = 0.3):
+    def __init__(self, iam_dataset: IAMDataset, synth_prob: float = 0.3, **kwargs):
         """
         Args:
             iam_dataset (Dataset): the IAM dataset to sample from
@@ -643,6 +639,7 @@ class IAMDatasetSynthetic(Dataset):
             transforms=iam_dataset.transforms,
             sample_form=(True if iam_dataset.parse_method == "form" else False),
             only_lowercase=iam_dataset.only_lowercase,
+            **kwargs,
         )
 
     def __getitem__(self, idx):
