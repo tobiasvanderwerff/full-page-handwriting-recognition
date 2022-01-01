@@ -110,8 +110,8 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         # different models.
         self.log("hp_metric", metrics["char_error_rate"])
 
-        # return loss
-        return {"logits": logits, "targets": targets}
+        return loss
+        # return {"logits": logits, "targets": targets}
 
     # def validation_epoch_end(self, validation_step_outputs):
     #     """Aggregate logits and targets, for the purpose of later callback logic."""
@@ -119,7 +119,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
     #     self.all_targets = torch.cat(validation_step_outputs["targets"], 0)
 
     def configure_optimizers(self):
-        return optim.AdamW(self.parameters(), lr=self.learning_rate)
+        return optim.Adam(self.parameters(), lr=self.learning_rate)
 
     @staticmethod
     def add_model_specific_args(parent_parser):

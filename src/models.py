@@ -450,4 +450,4 @@ class FullPageHTREncoderDecoder(nn.Module):
     @staticmethod
     def full_page_htr_optimizer_params() -> Dict[str, Any]:
         """Optimizer parameters used in Singh et al., see page 9."""
-        return {"optimizer_name": "AdamW", "lr": 0.0002, "betas": (0.9, 0.999)}
+        return {"optimizer_name": "Adam", "lr": 0.0002, "betas": (0.9, 0.999)}
