@@ -374,6 +374,7 @@ class IAMSyntheticDataGenerator(Dataset):
             "word",
             "test",
             skip_bad_segmentation=True,
+            only_lowercase=only_lowercase,
         )
         if self.max_height is None:
             self.max_height = IAMDataset.MAX_FORM_HEIGHT
@@ -403,11 +404,7 @@ class IAMSyntheticDataGenerator(Dataset):
         if self.transforms is not None:
             img = self.transforms(image=img)["image"]
         # Encode the target sequence using the label encoder.
-        target_enc = np.array(
-            self.label_encoder.transform(
-                [c for c in (target.lower() if self.only_lowercase else target)]
-            )
-        )
+        target_enc = np.array(self.label_encoder.transform([c for c in target]))
         return img, target_enc
 
     def generate_line(self) -> Tuple[np.ndarray, str]:
