@@ -59,20 +59,15 @@ tensorboard --logdir lightning_logs
 This will provide a localhost link to the Tensorboard dashboard.
 
 ## Synthetic data augmentation
+
 Additionally, this repo includes an implementation of one of the synthetic data
-augmentation schemes used in the paper, namely combining individual words from IAM
-to create new line or form images. Below are two examples of generated line
-images (for more examples, check out the notebook `synthetic_data_augmentation.ipynb`).
+augmentation schemes used in the paper, namely combining random spans of words from IAM
+to create new line or form images. Initial experiments suggest that the synthetic data
+augmentation can significantly improve performance on the validation set. Below is an
+example of a generated form image (for more examples, check out the
+notebook `synthetic_data_augmentation.ipynb`).
 
-
-![synthetic_img_example_1](img/synthetic_line_example_1.png)
-
-![synthetic_img_example_1](img/synthetic_line_example_2.png)
-
-As of right now, the words are sampled (mostly) randomly, which means
-that most often the sentences are not really interpretable. However, initial experiments
-suggest that the synthetic data augmentation can significantly improve performance on
-the validation set.
+![synthetic_form_example](img/synthetic_form_example.png)
 
 This synthetic data augmentation can be included in training by setting
 the `--synthetic_augmentation_proba` flag, which indicates the probability of applying
@@ -82,14 +77,15 @@ of synthetic data.
 
 ## Preliminary results
 
-The table below provides preliminary results on line images, without any hyperparameter
-finetuning, using Resnet18 as image encoder. Note that synth. aug. indicates the use of
+The table below provides preliminary results for line images on the IAM validation set,
+without any hyperparameter finetuning. Note that synth. aug. indicates the use of
 synthetic data augmentation.
 
-| Model               | CER   | WER   |
-|---------------------|-------|-------|
-| FPHTR               | 28.9% | 38.4% |
-| FPHTR + synth. aug. | 9.4%  | 17.0% |
+| Model                        | CER   | WER   |
+|------------------------------|-------|-------|
+| FPHTR Resnet18               | 28.9% | 38.4% |
+| FPHTR Resnet18 + synth. aug. | 9.0%  | 16.5% |
+| FPHTR Resnet34 + synth. aug. | 8.8%  | 14.0% |
 
 Again, these numbers are without any kind of hyperparameter optimization, so they
 most likely do not represent the best possible performance.
