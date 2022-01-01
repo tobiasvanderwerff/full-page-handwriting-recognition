@@ -197,13 +197,6 @@ def main(args):
             monitor="word_error_rate",
             filename="{epoch}-{char_error_rate:.4f}-{word_error_rate:.4f}",
         ),
-        EarlyStopping(
-            monitor="word_error_rate",
-            patience=args.early_stopping_patience,
-            verbose=True,
-            mode="min",
-            check_on_train_epoch_end=False,
-        ),
         LogModelPredictions(
             ds.label_enc,
             val_batch=next(
@@ -245,6 +238,16 @@ def main(args):
             use_gpu=(False if args.use_cpu else True),
         ),
     ]
+    if args.early_stopping_patience != -1:
+        callbacks.append(
+            EarlyStopping(
+                monitor="word_error_rate",
+                patience=args.early_stopping_patience,
+                verbose=True,
+                mode="min",
+                check_on_train_epoch_end=False,
+            )
+        )
 
     trainer = Trainer.from_argparse_args(
         args,
@@ -286,7 +289,10 @@ if __name__ == "__main__":
                         help="Do not convert all target label sequences to lowercase, "
                              "but maintain the capital letters that are present.")
     parser.add_argument("--num_workers", type=int, default=0)
-    parser.add_argument("--early_stopping_patience", type=int, default=10)
+    parser.add_argument("--early_stopping_patience", type=int, default=-1,
+                        help="Number of checks with no improvement after which "
+                             "training will be stopped. Setting this to -1 will disable "
+                             "early stopping.")
     parser.add_argument("--save_all_checkpoints", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--use_cpu", action="store_true", default=False)
