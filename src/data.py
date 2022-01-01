@@ -50,7 +50,7 @@ class IAMDataset(Dataset):
         split: str,
         skip_bad_segmentation: bool = False,
         return_writer_id: bool = False,
-        only_lowercase: bool = True,
+        only_lowercase: bool = False,
         label_enc: Optional[LabelEncoder] = None,
     ):
         super().__init__()
@@ -349,7 +349,7 @@ class IAMSyntheticDataGenerator(Dataset):
         px_between_words: int = 50,
         px_around_image: Tuple[int, int] = (100, 200),
         sample_form: bool = False,
-        only_lowercase: bool = True,
+        only_lowercase: bool = False,
         rng_seed: int = 0,
         max_height: Optional[int] = None,
     ):

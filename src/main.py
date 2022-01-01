@@ -59,7 +59,7 @@ def main(args):
         args.data_format,
         "train",
         label_enc=label_enc,
-        only_lowercase=(not args.use_uppercase),
+        only_lowercase=args.use_lowercase,
     )
 
     if n_classes_saved is None:
@@ -183,7 +183,7 @@ def main(args):
                 "label_smoothing": args.label_smoothing,
                 "synthetic_augmentation_proba": args.synthetic_augmentation_proba,
                 "gradient_clip_val": args.gradient_clip_val,
-                "only_lowercase": not args.use_uppercase,
+                "only_lowercase": args.use_lowercase,
                 "loaded_model": args.load_model,
             },
         )
@@ -285,9 +285,8 @@ if __name__ == "__main__":
                         help="Validate a trained model, specified by its checkpoint "
                              "path.")
     parser.add_argument("--use_aachen_splits", action="store_true", default=False)
-    parser.add_argument("--use_uppercase", action="store_true", default=False,
-                        help="Do not convert all target label sequences to lowercase, "
-                             "but maintain the capital letters that are present.")
+    parser.add_argument("--use_lowercase", action="store_true", default=False,
+                        help="Convert all target label sequences to lowercase.")
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--early_stopping_patience", type=int, default=-1,
                         help="Number of checks with no improvement after which "
