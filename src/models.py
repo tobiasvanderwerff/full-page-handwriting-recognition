@@ -318,6 +318,7 @@ class FullPageHTREncoderDecoder(nn.Module):
         drop_enc: int = 0.5,
         drop_dec: int = 0.5,
         activ_dec: str = "gelu",
+        label_smoothing: float = 0.0,
         vocab_len: Optional[int] = None,
     ):
         """
@@ -337,6 +338,10 @@ class FullPageHTREncoderDecoder(nn.Module):
             drop_enc (int): dropout rate used in the encoder
             drop_dec (int): dropout rate used in the decoder
             activ_dec (str): activation function of the decoder
+            label_smoothing (float): label smoothing epsilon for the cross-entropy
+                loss (0.0 indicates no smoothing)
+            vocab_len (Optional[int]): length of the vocabulary. If passed,
+                it is used rather than the length of the classes in the label encoder
         """
         super().__init__()
 
@@ -366,7 +371,9 @@ class FullPageHTREncoderDecoder(nn.Module):
         # Initialize metrics and loss function.
         self.cer_metric = CharacterErrorRate(label_encoder)
         self.wer_metric = WordErrorRate(label_encoder)
-        self.loss_fn = nn.CrossEntropyLoss(ignore_index=pad_tkn_idx)
+        self.loss_fn = nn.CrossEntropyLoss(
+            ignore_index=pad_tkn_idx, label_smoothing=label_smoothing
+        )
 
     def forward(
         self, imgs: Tensor, targets: Optional[Tensor] = None

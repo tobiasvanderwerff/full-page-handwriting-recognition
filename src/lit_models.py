@@ -24,6 +24,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         self,
         label_encoder: LabelEncoder,
         learning_rate: float = 0.0002,
+        label_smoothing: float = 0.0,
         max_seq_len: int = 500,
         d_model: int = 260,
         num_layers: int = 6,
@@ -68,6 +69,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
             drop_dec=drop_dec,
             activ_dec=activ_dec,
             vocab_len=vocab_len,
+            label_smoothing=label_smoothing,
         )
 
         self.all_logits = None

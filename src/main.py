@@ -168,6 +168,7 @@ def main(args):
             encoder_name=args.encoder,
             drop_enc=args.drop_enc,
             drop_dec=args.drop_dec,
+            label_smoothing=args.label_smoothing,
             params_to_log={
                 "batch_size": int(args.num_nodes * args.batch_size)
                 * (args.accumulate_grad_batches or 1),
@@ -179,7 +180,7 @@ def main(args):
                 "precision": args.precision,
                 "accumulate_grad_batches": args.accumulate_grad_batches,
                 "early_stopping_patience": args.early_stopping_patience,
-                # "label_smoothing": args.label_smoothing,
+                "label_smoothing": args.label_smoothing,
                 "synthetic_augmentation_proba": args.synthetic_augmentation_proba,
                 "gradient_clip_val": args.gradient_clip_val,
                 "only_lowercase": not args.use_uppercase,
@@ -272,8 +273,8 @@ if __name__ == "__main__":
     parser.add_argument("--synthetic_augmentation_proba", type=float, default=0.0,
                         help=("Probability of sampling synthetic IAM line/form images "
                               "during training."))
-    # parser.add_argument("--label_smoothing", type=float, default=0.0,
-    #                     help="Label smoothing epsilon (0.0 indicates no smoothing)")
+    parser.add_argument("--label_smoothing", type=float, default=0.0,
+                        help="Label smoothing epsilon (0.0 indicates no smoothing)")
     parser.add_argument("--load_model", type=str, default=None,
                         help="Start training from a saved model, specified by its "
                              "checkpoint path.")
