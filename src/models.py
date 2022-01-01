@@ -175,6 +175,7 @@ class FullPageHTRDecoder(nn.Module):
             self.emb(sampled_ids[0]).unsqueeze(1) * math.sqrt(self.d_model)
         )
         tgt = self.drop(tgt)
+        eos_sampled = torch.zeros(B).bool()
         for t in range(self.max_seq_len):
             tgt_mask = self.subsequent_mask(len(sampled_ids)).to(memory.device)
             out = self.decoder(tgt, memory, tgt_mask=tgt_mask)  # out: (B, T, d_model)
@@ -182,10 +183,11 @@ class FullPageHTRDecoder(nn.Module):
             _, pred = torch.max(logits, -1)
             all_logits.append(logits)
             sampled_ids.append(pred)
-            # TODO: The if statement below does not work, since .all() most likely never hits. However, it can be
-            #  potentially very beneficial to implement this nonetheless, e.g. by keeping track of whether the
-            #  <EOS> token has been sampled for each sequence in the batch.
-            if (pred == self.eos_tkn_idx).all():
+            for i, pr in enumerate(pred):
+                # Check if <EOS> is sampled for each token sequence in the batch.
+                if pr == self.eos_tkn_idx:
+                    eos_sampled[i] = True
+            if eos_sampled.all():
                 break
             tgt_ext = self.drop(
                 self.pos_emb.pe[:, len(sampled_ids)]
@@ -195,7 +197,7 @@ class FullPageHTRDecoder(nn.Module):
         sampled_ids = torch.stack(sampled_ids, 1)
         all_logits = torch.stack(all_logits, 1)
 
-        # Replace all sampled_ids tokens after <EOS> with <PAD> tokens.
+        # Replace all tokens in `sampled_ids` after <EOS> with <PAD> tokens.
         eos_idxs = (sampled_ids == self.eos_tkn_idx).float().argmax(1)
         for i in range(B):
             if eos_idxs[i] != 0:  # sampled sequence contains <EOS> token
