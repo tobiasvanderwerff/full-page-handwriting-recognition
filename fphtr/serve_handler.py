@@ -21,11 +21,8 @@ logger = logging.getLogger(__name__)
 
 class ImageTextTranscription(VisionHandler):
     """
-    Handler class. This handler extends class ImageClassifier, a default handler. This
+    Handler class. This handler extends class VisionHandler, a default handler. This
     handler takes an image and returns the transcription of the text in that image.
-
-    Here method postprocess() has been overridden while others are reused from parent
-    class.
     """
 
     IMG_SCALES_GRID_SEARCH = [0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
