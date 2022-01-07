@@ -4,6 +4,16 @@ Extraction" by Singh et al. (2021) ([Arxiv link](https://arxiv.org/abs/2103.0645
 
 ![model-schematic](img/model-schematic.png)
 
+_NOTE: I have not been able to reproduce the results from the original paper on full
+pages. Even though I succesfully managed to train models for word and line images,
+training on full-page images always leads to overfitting in all configurations I tried
+thus far. I have followed the implementation details from the paper as closely as
+possible (including the synthetic data augmentation scheme to create additional data,
+explained [below](user-content-synthetic-data-augmentation)),
+but no configuration has lead to a word error rate below 95% on the validation set. I
+might try doing some more hyperparameter tuning in the future to try and improve
+performance, but nothing has shown promise so far._
+
 ## How to run
 
 In the current implementation, the IAM dataset is used for training the model. Download
@@ -20,7 +30,13 @@ pip install -r requirements.txt
 Now run the main script to train a model, e.g.
 
 ```shell
-python src/main.py --data_dir /path/to/IAM --data_format form --max_epochs 3 --use_cpu
+python src/main.py --data_dir /path/to/IAM \
+                   --data_format form \
+                   --max_epochs 3 \
+                   --synthetic_augmentation_proba 0.4 \
+                   --precision 16 \
+                   --use_aachen_splits \
+                   --use_cpu \
 ```
 
 NOTE: running this model on full page images can quickly lead to out-of-memory errors,
@@ -60,20 +76,18 @@ This will provide a localhost link to the Tensorboard dashboard.
 
 ## Synthetic data augmentation
 
-Additionally, this repo includes an implementation of one of the synthetic data
-augmentation schemes used in the paper, namely combining random spans of words from IAM
-to create new line or form images. Initial experiments suggest that the synthetic data
-augmentation can significantly improve performance on the validation set. Below is an
-example of a generated form image (for more examples, check out the
-notebook `synthetic_data_augmentation.ipynb`).
+Additionally, this repo includes an implementation of the synthetic data augmentation
+scheme used in the paper, namely combining random spans of words from IAM to create new
+line or form images. Below is an example of a generated form image (for more examples,
+check out the notebook `synthetic_data_augmentation.ipynb`).
 
 ![synthetic_form_example](img/synthetic_form_example.png)
 
 This synthetic data augmentation can be included in training by setting
 the `--synthetic_augmentation_proba` flag, which indicates the probability of applying
 the synthetic data augmentation. For example, setting
-`--synthetic_augmentation_proba 0.3` means that in every batch, roughly 30% will consist
-of synthetic data.
+`--synthetic_augmentation_proba 0.3` means that on average, 30% of every batch will
+consist of synthetic data.
 
 ## Preliminary results
 
