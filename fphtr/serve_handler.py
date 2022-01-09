@@ -57,12 +57,6 @@ class ImageTextTranscription(VisionHandler):
 
         logger.debug("Loading eager model")
 
-        # # model def file
-        # model_file = Path(self.manifest["model"].get("modelFile", ""))
-        # model_def_path = model_dir / model_file
-        # if not model_def_path.is_file():
-        #     raise RuntimeError("Missing the model.py file")
-
         # Load the label encoder for the trained model.
         self.label_encoder = pd.read_pickle(model_dir / "label_encoder.pkl")
 
@@ -89,10 +83,6 @@ class ImageTextTranscription(VisionHandler):
             tensor: Returns the tensor data of the input
         """
 
-        # logger.info(f"length of `data`: {len(data)}")
-        # logger.info(f"type of `data` element: {type(data[0])}")
-        # logger.info(f"`data[0]`: {data[0]}")
-
         assert len(data) == 1
 
         for row in data:
@@ -105,13 +95,9 @@ class ImageTextTranscription(VisionHandler):
             if isinstance(img, (bytearray, bytes)):
                 img = np.frombuffer(img, dtype=np.uint8)
                 img = cv.imdecode(img, cv.IMREAD_GRAYSCALE)
-                # img = img.open(io.BytesIO(img))
-                # img = self.image_processing(img)
             else:
                 # if the image is a list
                 img = torch.FloatTensor(img)
-
-        # img = VisionHandler.preprocess(self, b64_data).squeeze()
 
         # Find the best image scale.
         imgs = []
@@ -122,7 +108,6 @@ class ImageTextTranscription(VisionHandler):
             imgs.append(trnsf(image=img)["image"])
 
         # Pad the images to fit in one batch.
-        # TODO: check if this padding is potentially harmful to performance.
         img_sizes = [im.shape for im in imgs]
         hs, ws = zip(*img_sizes)
         pad_fn = A.PadIfNeeded(
