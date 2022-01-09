@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import pickle
 import random
 import math
 from copy import copy
@@ -10,15 +9,14 @@ from functools import partial
 
 from lit_models import LitFullPageHTREncoderDecoder
 from lit_callbacks import LogModelPredictions
-from data import IAMDataset, IAMDatasetSynthetic
-from util import LitProgressBar
+from data import IAMDataset, IAMDatasetSynthetic, IAMSyntheticDataGenerator
+from util import LitProgressBar, LabelEncoder
 
 import torch
-import pandas as pd
 from torch.utils.data import DataLoader, Subset
 from pytorch_lightning import seed_everything, Trainer
 from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, ModelSummary
 from pytorch_lightning.plugins import DDPPlugin
 
 LOGGING_DIR = "lightning_logs/"
@@ -39,31 +37,43 @@ def main(args):
     )
 
     label_enc = None
-    if args.validate:
+    n_classes_saved = None
+    if args.validate or args.load_model:
         # Load the label encoder for the trained model.
-        le_path = Path(args.validate).parent.parent / "label_encoder.pkl"
-        assert le_path.is_file(), (
-            f"Label encoder file not found at {le_path}. "
-            f"Make sure 'label_encoder.pkl' exists in the lightning_logs directory."
+        model_path = Path(args.validate) if args.validate else Path(args.load_model)
+        le_path_1 = model_path.parent.parent / "label_encoding.txt"
+        le_path_2 = model_path.parent.parent / "label_encoder.pkl"
+        assert le_path_1.is_file() or le_path_2.is_file(), (
+            f"Label encoder file not found at {le_path_1} or {le_path_2}. "
+            f"Make sure 'label_encoding.txt' exists in the lightning_logs directory."
         )
-        label_enc = pd.read_pickle(le_path)
+        le_path = le_path_2 if le_path_2.is_file() else le_path_1
+        label_enc = LabelEncoder().read_encoding(le_path)
+        n_classes_saved = label_enc.n_classes  # num. output classes for the saved model
+        if args.data_format == "form":
+            # Add the `\n` token to the label encoder (since forms can contain newlines)
+            label_enc.add_classes(["\n"])
 
     ds = IAMDataset(
-        args.data_dir, args.data_format, "train", use_cache=False, label_enc=label_enc
+        args.data_dir,
+        args.data_format,
+        "train",
+        label_enc=label_enc,
+        only_lowercase=args.use_lowercase,
     )
+
+    if n_classes_saved is None:
+        n_classes_saved = ds.label_enc.n_classes
 
     if not args.validate:
         # Save the label encoder.
         save_dir = Path(tb_logger.log_dir)
         save_dir.mkdir(exist_ok=True, parents=True)
-        le_path = save_dir / "label_encoder.pkl"
-        if not le_path.is_file():
-            with open(le_path, "wb") as f:
-                pickle.dump(ds.label_enc, f)
+        ds.label_enc.dump(save_dir)
 
     eos_tkn_idx, sos_tkn_idx, pad_tkn_idx = ds.label_enc.transform(
         [ds._eos_token, ds._sos_token, ds._pad_token]
-    ).tolist()
+    )
     collate_fn = partial(
         IAMDataset.collate_fn, pad_val=pad_tkn_idx, eos_tkn_idx=eos_tkn_idx
     )
@@ -101,10 +111,19 @@ def main(args):
         ds_val.dataset = copy(ds)
         ds_val.dataset.set_transforms_for_split("val")
 
+    worker_init_fn = None
     if args.synthetic_augmentation_proba > 0.0:
+        words_per_sequence = (7, 13)
+        if args.data_format == "line":
+            # Change the length of the sampled IAM word sequences for more diversity
+            # in writing style on a single line.
+            words_per_sequence = (2, 5)
         ds_train = IAMDatasetSynthetic(
-            ds_train, synth_prob=args.synthetic_augmentation_proba
+            ds_train,
+            synth_prob=args.synthetic_augmentation_proba,
+            words_per_sequence=words_per_sequence,
         )
+        worker_init_fn = IAMSyntheticDataGenerator.get_worker_init_fn()
 
     # Initialize dataloaders.
     dl_train = DataLoader(
@@ -114,6 +133,7 @@ def main(args):
         collate_fn=collate_fn,
         num_workers=args.num_workers,
         pin_memory=True,
+        worker_init_fn=worker_init_fn,
     )
     dl_val = DataLoader(
         ds_val,
@@ -124,19 +144,22 @@ def main(args):
         pin_memory=True,
     )
 
-    if args.validate is not None:
-        assert Path(
-            args.validate
-        ).is_file(), f"{args.validate} does not point to a file."
+    if args.validate or args.load_model:
+        model_path = Path(args.validate) if args.validate else Path(args.load_model)
+        assert Path(model_path).is_file(), f"{model_path} does not point to a file."
         # Load the model. Note that the vocab length and special tokens given below
         # are derived from the saved label encoder associated with the checkpoint.
         model = LitFullPageHTREncoderDecoder.load_from_checkpoint(
-            args.validate,
+            str(model_path),
             label_encoder=ds.label_enc,
+            vocab_len=n_classes_saved,
         )
+        if args.load_model:
+            model.model.set_num_output_classes(ds.label_enc.n_classes)
     else:
         model = LitFullPageHTREncoderDecoder(
             label_encoder=ds.label_enc,
+            learning_rate=args.learning_rate,
             max_seq_len=IAMDataset.MAX_SEQ_LENS[args.data_format],
             d_model=args.d_model,
             num_layers=args.num_layers,
@@ -145,8 +168,10 @@ def main(args):
             encoder_name=args.encoder,
             drop_enc=args.drop_enc,
             drop_dec=args.drop_dec,
+            label_smoothing=args.label_smoothing,
             params_to_log={
-                "batch_size": int(args.num_nodes * args.batch_size),
+                "batch_size": int(args.num_nodes * args.batch_size)
+                * (args.accumulate_grad_batches or 1),
                 "data_format": args.data_format,
                 "seed": args.seed,
                 "splits": ("Aachen" if args.use_aachen_splits else "random"),
@@ -155,26 +180,22 @@ def main(args):
                 "precision": args.precision,
                 "accumulate_grad_batches": args.accumulate_grad_batches,
                 "early_stopping_patience": args.early_stopping_patience,
-                # "label_smoothing": args.label_smoothing,
+                "label_smoothing": args.label_smoothing,
                 "synthetic_augmentation_proba": args.synthetic_augmentation_proba,
                 "gradient_clip_val": args.gradient_clip_val,
+                "only_lowercase": args.use_lowercase,
+                "loaded_model": args.load_model,
             },
         )
 
     callbacks = [
+        ModelSummary(max_depth=2),
         LitProgressBar(),
         ModelCheckpoint(
             save_top_k=(-1 if args.save_all_checkpoints else 3),
             mode="min",
             monitor="word_error_rate",
             filename="{epoch}-{char_error_rate:.4f}-{word_error_rate:.4f}",
-        ),
-        EarlyStopping(
-            monitor="word_error_rate",
-            patience=args.early_stopping_patience,
-            verbose=True,
-            mode="min",
-            check_on_train_epoch_end=False,
         ),
         LogModelPredictions(
             ds.label_enc,
@@ -217,6 +238,16 @@ def main(args):
             use_gpu=(False if args.use_cpu else True),
         ),
     ]
+    if args.early_stopping_patience != -1:
+        callbacks.append(
+            EarlyStopping(
+                monitor="word_error_rate",
+                patience=args.early_stopping_patience,
+                verbose=True,
+                mode="min",
+                check_on_train_epoch_end=False,
+            )
+        )
 
     trainer = Trainer.from_argparse_args(
         args,
@@ -245,14 +276,22 @@ if __name__ == "__main__":
     parser.add_argument("--synthetic_augmentation_proba", type=float, default=0.0,
                         help=("Probability of sampling synthetic IAM line/form images "
                               "during training."))
-    # parser.add_argument("--label_smoothing", type=float, default=0.0,
-    #                     help="Label smoothing epsilon (0.0 indicates no smoothing)")
+    parser.add_argument("--label_smoothing", type=float, default=0.0,
+                        help="Label smoothing epsilon (0.0 indicates no smoothing)")
+    parser.add_argument("--load_model", type=str, default=None,
+                        help="Start training from a saved model, specified by its "
+                             "checkpoint path.")
     parser.add_argument("--validate", type=str, default=None,
                         help="Validate a trained model, specified by its checkpoint "
                              "path.")
     parser.add_argument("--use_aachen_splits", action="store_true", default=False)
+    parser.add_argument("--use_lowercase", action="store_true", default=False,
+                        help="Convert all target label sequences to lowercase.")
     parser.add_argument("--num_workers", type=int, default=0)
-    parser.add_argument("--early_stopping_patience", type=int, default=10)
+    parser.add_argument("--early_stopping_patience", type=int, default=-1,
+                        help="Number of checks with no improvement after which "
+                             "training will be stopped. Setting this to -1 will disable "
+                             "early stopping.")
     parser.add_argument("--save_all_checkpoints", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--use_cpu", action="store_true", default=False)

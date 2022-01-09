@@ -7,10 +7,10 @@ import torch.nn.functional as F
 import numpy as np
 import cv2 as cv
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
 
 from lit_models import LitFullPageHTREncoderDecoder
 from transforms import IAMImageTransforms
+from util import LabelEncoder
 
 
 IMG_SCALES_GRID_SEARCH = [0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
@@ -80,7 +80,13 @@ def prepare_data(
     )
 
     # Load the label encoder for the trained model.
-    label_enc = pd.read_pickle(model_path.parent.parent / "label_encoder.pkl")
+    le_dir = model_path.parent.parent
+    le_path = (
+        le_dir / "label_encoder.pkl"
+        if (le_dir / "label_encoder.pkl").is_file()
+        else le_dir / "label_encoding.txt"
+    )
+    label_enc = LabelEncoder().read_encoding(le_path)
 
     # Apply image transforms.
     imgs = []
@@ -116,13 +122,8 @@ if __name__ == "__main__":
     # fmt: on
 
     img_path, model_path = args.img_path, args.model_path
-    le_path = model_path.parent.parent / "label_encoder.pkl"
     assert model_path.is_file(), f"{model_path} does not point to a file."
     assert img_path.is_file(), f"Image path {img_path} does not point to a file."
-    assert le_path.is_file(), (
-        f"Label encoder file not found at {le_path}. "
-        f"Make sure 'label_encoder.pkl' exists at the aforementioned path."
-    )
 
     imgs, label_encoder = prepare_data(
         img_path, model_path, args.data_format, args.search_resolution

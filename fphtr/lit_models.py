@@ -1,11 +1,12 @@
 from typing import Optional, Dict, Union
 
 from fphtr.models import FullPageHTREncoderDecoder
+from fphtr.util import LabelEncoder
 
+import torch
 import torch.optim as optim
 import pytorch_lightning as pl
 from torch import Tensor
-from sklearn.preprocessing import LabelEncoder
 
 
 class LitFullPageHTREncoderDecoder(pl.LightningModule):
@@ -23,6 +24,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         self,
         label_encoder: LabelEncoder,
         learning_rate: float = 0.0002,
+        label_smoothing: float = 0.0,
         max_seq_len: int = 500,
         d_model: int = 260,
         num_layers: int = 6,
@@ -32,6 +34,7 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         drop_enc: int = 0.5,
         drop_dec: int = 0.5,
         activ_dec: str = "gelu",
+        vocab_len: Optional[int] = None,  # if not specified len(label_encoder) is used
         params_to_log: Optional[Dict[str, Union[str, float, int]]] = None,
     ):
         super().__init__()
@@ -65,7 +68,12 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
             drop_enc=drop_enc,
             drop_dec=drop_dec,
             activ_dec=activ_dec,
+            vocab_len=vocab_len,
+            label_smoothing=label_smoothing,
         )
+
+        self.all_logits = None
+        self.all_targets = None
 
     @property
     def encoder(self):
@@ -103,9 +111,15 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         self.log("hp_metric", metrics["char_error_rate"])
 
         return loss
+        # return {"logits": logits, "targets": targets}
+
+    # def validation_epoch_end(self, validation_step_outputs):
+    #     """Aggregate logits and targets, for the purpose of later callback logic."""
+    #     self.all_logits = torch.cat(validation_step_outputs["logits"], 0)
+    #     self.all_targets = torch.cat(validation_step_outputs["targets"], 0)
 
     def configure_optimizers(self):
-        return optim.AdamW(self.parameters(), lr=self.learning_rate)
+        return optim.Adam(self.parameters(), lr=self.learning_rate)
 
     @staticmethod
     def add_model_specific_args(parent_parser):

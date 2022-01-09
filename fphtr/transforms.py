@@ -10,7 +10,10 @@ import numpy as np
 
 
 def randomly_displace_and_pad(
-    img: np.ndarray, padded_size: Tuple[int, int], **kwargs
+    img: np.ndarray,
+    padded_size: Tuple[int, int],
+    crop_if_necessary: bool = False,
+    **kwargs,
 ) -> np.ndarray:
     """
     Randomly displace an image within a frame, and pad zeros around the image.
@@ -18,17 +21,30 @@ def randomly_displace_and_pad(
     Args:
         img (np.ndarray): image to process
         padded_size (Tuple[int, int]): (height, width) tuple indicating the size of the frame
+        crop_if_necessary (bool): whether to crop the image if its size exceeds that
+            of the frame
     """
-    h, w = padded_size
+    frame_h, frame_w = padded_size
     img_h, img_w = img.shape
-    assert (
-        h >= img_h and w >= img_w
-    ), f"Frame is smaller than the image: ({h}, {w}) vs. ({img_h}, {img_w})"
-    res = np.zeros((h, w), dtype=img.dtype)
+    if frame_h < img_h or frame_w < img_w:
+        if crop_if_necessary:
+            print(
+                "WARNING (`randomly_displace_and_pad`): cropping input image before "
+                "padding because it exceeds the size of the frame."
+            )
+            img_h, img_w = min(img_h, frame_h), min(img_w, frame_w)
+            img = img[:img_h, :img_w]
+        else:
+            raise AssertionError(
+                f"Frame is smaller than the image: ({frame_h}, {frame_w}) vs. ({img_h},"
+                f" {img_w})"
+            )
 
-    pad_top = random.randint(0, h - img_h)
+    res = np.zeros((frame_h, frame_w), dtype=img.dtype)
+
+    pad_top = random.randint(0, frame_h - img_h)
     pad_bottom = pad_top + img_h
-    pad_left = random.randint(0, w - img_w)
+    pad_left = random.randint(0, frame_w - img_w)
     pad_right = pad_left + img_w
 
     res[pad_top:pad_bottom, pad_left:pad_right] = img
@@ -52,12 +68,12 @@ class IAMImageTransforms:
 
     max_img_size: Tuple[int, int]  # (h, w)
     parse_method: str
+    normalize_params: Tuple[float, float]  # (mean, std)
     scale: float = (
         0.5  # assuming A4 paper, this gives ~140 DPI (see Singh et al. p. 8, section 4)
     )
     random_scale_limit: float = 0.1
     random_rotate_limit: int = 10
-    normalize_params: Tuple[float, float] = (0.5, 0.5)
     train_trnsf: A.Compose = field(init=False)
     test_trnsf: A.Compose = field(init=False)
 
@@ -132,21 +148,23 @@ class IAMImageTransforms:
                     A.RandomBrightnessContrast(),
                     A.Perspective(scale=(0.03, 0.05)),
                     A.GaussNoise(),
+                    A.Normalize(*normalize_params),
                     A.Lambda(
                         image=partial(
-                            randomly_displace_and_pad, padded_size=(padded_h, padded_w)
+                            randomly_displace_and_pad,
+                            padded_size=(padded_h, padded_w),
+                            crop_if_necessary=True,
                         )
                     ),
-                    A.Normalize(*normalize_params),
                 ]
             )
             self.test_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
+                    A.Normalize(*normalize_params),
                     A.PadIfNeeded(
                         max_img_h, max_img_w, border_mode=cv.BORDER_CONSTANT, value=0
                     ),
-                    A.Normalize(*normalize_params),
                 ]
             )
         else:

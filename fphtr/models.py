@@ -7,11 +7,11 @@ import math
 from typing import Dict, Any, Tuple, Optional, Union, Callable
 
 from fphtr.metrics import CharacterErrorRate, WordErrorRate
+from fphtr.util import LabelEncoder
 
 import torch
 import torch.nn as nn
 import torchvision
-from sklearn.preprocessing import LabelEncoder
 from torch import Tensor
 
 
@@ -175,6 +175,7 @@ class FullPageHTRDecoder(nn.Module):
             self.emb(sampled_ids[0]).unsqueeze(1) * math.sqrt(self.d_model)
         )
         tgt = self.drop(tgt)
+        eos_sampled = torch.zeros(B).bool()
         for t in range(self.max_seq_len):
             tgt_mask = self.subsequent_mask(len(sampled_ids)).to(memory.device)
             out = self.decoder(tgt, memory, tgt_mask=tgt_mask)  # out: (B, T, d_model)
@@ -182,10 +183,11 @@ class FullPageHTRDecoder(nn.Module):
             _, pred = torch.max(logits, -1)
             all_logits.append(logits)
             sampled_ids.append(pred)
-            # TODO: The if statement below does not work, since .all() most likely never hits. However, it can be
-            #  potentially very beneficial to implement this nonetheless, e.g. by keeping track of whether the
-            #  <EOS> token has been sampled for each sequence in the batch.
-            if (pred == self.eos_tkn_idx).all():
+            for i, pr in enumerate(pred):
+                # Check if <EOS> is sampled for each token sequence in the batch.
+                if pr == self.eos_tkn_idx:
+                    eos_sampled[i] = True
+            if eos_sampled.all():
                 break
             tgt_ext = self.drop(
                 self.pos_emb.pe[:, len(sampled_ids)]
@@ -195,7 +197,7 @@ class FullPageHTRDecoder(nn.Module):
         sampled_ids = torch.stack(sampled_ids, 1)
         all_logits = torch.stack(all_logits, 1)
 
-        # Replace all sampled_ids tokens after <EOS> with <PAD> tokens.
+        # Replace all tokens in `sampled_ids` after <EOS> with <PAD> tokens.
         eos_idxs = (sampled_ids == self.eos_tkn_idx).float().argmax(1)
         for i in range(B):
             if eos_idxs[i] != 0:  # sampled sequence contains <EOS> token
@@ -318,13 +320,15 @@ class FullPageHTREncoderDecoder(nn.Module):
         drop_enc: int = 0.5,
         drop_dec: int = 0.5,
         activ_dec: str = "gelu",
+        label_smoothing: float = 0.0,
+        vocab_len: Optional[int] = None,
     ):
         """
         Model used in Singh et al. (2021). The default hyperparameters are those used
         in the paper, whenever they were available.
 
         Args:
-            label_encoder (LabelEncoder): Sklearn label encoder, which provides an
+            label_encoder (LabelEncoder): Label encoder, which provides an
                 integer encoding of token values.
             d_model (int): the number of expected features in the decoder inputs
             num_layers (int): the number of sub-decoder-layers in the decoder
@@ -336,20 +340,24 @@ class FullPageHTREncoderDecoder(nn.Module):
             drop_enc (int): dropout rate used in the encoder
             drop_dec (int): dropout rate used in the decoder
             activ_dec (str): activation function of the decoder
+            label_smoothing (float): label smoothing epsilon for the cross-entropy
+                loss (0.0 indicates no smoothing)
+            vocab_len (Optional[int]): length of the vocabulary. If passed,
+                it is used rather than the length of the classes in the label encoder
         """
         super().__init__()
 
         # Obtain special token indices.
         eos_tkn_idx, sos_tkn_idx, pad_tkn_idx = label_encoder.transform(
             ["<EOS>", "<SOS>", "<PAD>"]
-        ).tolist()
+        )
 
         # Initialize encoder and decoder.
         self.encoder = FullPageHTREncoder(
             d_model, model_name=encoder_name, dropout=drop_enc
         )
         self.decoder = FullPageHTRDecoder(
-            vocab_len=len(label_encoder.classes_.tolist()),
+            vocab_len=(vocab_len or label_encoder.n_classes),
             max_seq_len=max_seq_len,
             eos_tkn_idx=eos_tkn_idx,
             sos_tkn_idx=sos_tkn_idx,
@@ -365,7 +373,9 @@ class FullPageHTREncoderDecoder(nn.Module):
         # Initialize metrics and loss function.
         self.cer_metric = CharacterErrorRate(label_encoder)
         self.wer_metric = WordErrorRate(label_encoder)
-        self.loss_fn = nn.CrossEntropyLoss(ignore_index=pad_tkn_idx)
+        self.loss_fn = nn.CrossEntropyLoss(
+            ignore_index=pad_tkn_idx, label_smoothing=label_smoothing
+        )
 
     def forward(
         self, imgs: Tensor, targets: Optional[Tensor] = None
@@ -412,7 +422,34 @@ class FullPageHTREncoderDecoder(nn.Module):
         wer = self.wer_metric(preds, targets)
         return {"char_error_rate": cer, "word_error_rate": wer}
 
+    def set_num_output_classes(self, n_classes: int):
+        """
+        Set number of output classes of the model. This has an effect on the
+        final classification layer and the token embeddings. This is
+        useful for finetuning a trained model with additional output classes.
+        """
+        assert n_classes >= self.decoder.vocab_len, (
+            "Currently, can only add classes, " "not remove them."
+        )
+        print(
+            "Re-initializing the classification layer of the model. This is "
+            "intended behavior if you initalize model training from a trained model."
+        )
+        # Re-initialize classification layer.
+        old_vocab_len = self.decoder.vocab_len
+        self.decoder.vocab_len = n_classes
+        self.decoder.clf = nn.Linear(self.decoder.d_model, n_classes)
+
+        # Add additional token embeddings for the new classes.
+        # NOTE: we are assuming here that the first n embeddings from the old model
+        # are still indexed in the same way, i.e. the new classes are given indices
+        # starting from index n.
+        new_embs = nn.Embedding(n_classes, self.decoder.d_model)
+        with torch.no_grad():
+            new_embs.weight[:old_vocab_len] = self.decoder.emb.weight
+            self.decoder.emb = new_embs
+
     @staticmethod
     def full_page_htr_optimizer_params() -> Dict[str, Any]:
         """Optimizer parameters used in Singh et al., see page 9."""
-        return {"optimizer_name": "AdamW", "lr": 0.0002, "betas": (0.9, 0.999)}
+        return {"optimizer_name": "Adam", "lr": 0.0002, "betas": (0.9, 0.999)}
