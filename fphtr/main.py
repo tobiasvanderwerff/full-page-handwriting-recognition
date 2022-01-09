@@ -7,10 +7,10 @@ from copy import copy
 from pathlib import Path
 from functools import partial
 
-from lit_models import LitFullPageHTREncoderDecoder
-from lit_callbacks import LogModelPredictions
-from data import IAMDataset, IAMDatasetSynthetic, IAMSyntheticDataGenerator
-from util import LitProgressBar, LabelEncoder
+from fphtr.lit_models import LitFullPageHTREncoderDecoder
+from fphtr.lit_callbacks import LogModelPredictions
+from fphtr.data import IAMDataset, IAMDatasetSynthetic, IAMSyntheticDataGenerator
+from fphtr.util import LitProgressBar, LabelEncoder
 
 import torch
 from torch.utils.data import DataLoader, Subset

@@ -14,6 +14,7 @@ from torch.profiler import ProfilerActivity
 
 from fphtr.lit_models import LitFullPageHTREncoderDecoder
 from fphtr.transforms import IAMImageTransforms
+from fphtr.util import LabelEncoder
 
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,9 @@ class ImageTextTranscription(VisionHandler):
         logger.debug("Loading eager model")
 
         # Load the label encoder for the trained model.
-        self.label_encoder = pd.read_pickle(model_dir / "label_encoder.pkl")
+        self.label_encoder = LabelEncoder().read_encoding(
+            model_dir / "label_encoder.pkl"
+        )
 
         # Load model.
         self.model = LitFullPageHTREncoderDecoder.load_from_checkpoint(
@@ -104,7 +107,9 @@ class ImageTextTranscription(VisionHandler):
         h, w = img.shape
         for scale in self.IMG_SCALES_GRID_SEARCH:
             # Apply image transforms.
-            trnsf = IAMImageTransforms((0, 0), "line", scale=scale).test_trnsf
+            trnsf = IAMImageTransforms(
+                (0, 0), "line", normalize_params=(0.5, 0.5), scale=scale
+            ).test_trnsf
             imgs.append(trnsf(image=img)["image"])
 
         # Pad the images to fit in one batch.
@@ -174,5 +179,7 @@ class ImageTextTranscription(VisionHandler):
         if sampled_ids[-1] == eos_tkn_idx:
             sampled_ids = sampled_ids[:-1]
         pred_str = "".join((self.label_encoder.inverse_transform(sampled_ids)))
+
+        logger.info(f"Prediction: {pred_str}")
 
         return [pred_str]

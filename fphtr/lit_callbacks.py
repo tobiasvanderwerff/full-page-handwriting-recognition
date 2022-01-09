@@ -1,10 +1,9 @@
 import math
 from typing import Tuple, Optional
 
-import torch
-
 from fphtr.util import matplotlib_imshow
 
+import torch
 import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 from pytorch_lightning.callbacks import Callback

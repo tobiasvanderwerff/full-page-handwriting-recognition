@@ -8,9 +8,9 @@ import numpy as np
 import cv2 as cv
 import pandas as pd
 
-from lit_models import LitFullPageHTREncoderDecoder
-from transforms import IAMImageTransforms
-from util import LabelEncoder
+from fphtr.lit_models import LitFullPageHTREncoderDecoder
+from fphtr.transforms import IAMImageTransforms
+from fphtr.util import LabelEncoder
 
 
 IMG_SCALES_GRID_SEARCH = [0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
