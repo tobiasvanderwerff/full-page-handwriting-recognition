@@ -48,7 +48,6 @@ class IAMDataset(Dataset):
         root: Union[Path, str],
         parse_method: str,
         split: str,
-        skip_bad_segmentation: bool = False,
         return_writer_id: bool = False,
         only_lowercase: bool = False,
         label_enc: Optional[LabelEncoder] = None,
@@ -76,9 +75,9 @@ class IAMDataset(Dataset):
             if self.parse_method == "form":
                 self.data = self._get_forms()
             elif self.parse_method == "word":
-                self.data = self._get_words(skip_bad_segmentation)
+                self.data = self._get_words(skip_bad_segmentation=True)
             elif self.parse_method == "line":
-                self.data = self._get_lines(skip_bad_segmentation)
+                self.data = self._get_lines()
 
         # Create the label encoder.
         if self.label_enc is None:
@@ -373,7 +372,6 @@ class IAMSyntheticDataGenerator(Dataset):
             iam_root,
             "word",
             "test",
-            skip_bad_segmentation=True,
             only_lowercase=only_lowercase,
         )
         if self.max_height is None:
