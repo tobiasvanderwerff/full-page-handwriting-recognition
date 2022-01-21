@@ -57,6 +57,17 @@ def dpi_adjusting(img: np.ndarray, scale: float, **kwargs) -> np.ndarray:
     return cv.resize(img, (new_width, new_height))
 
 
+class SafeRandomScale(A.RandomScale):
+    """Checks if the scaled image dimensions are valid before applying random scaling."""
+
+    def apply(self, img, scale=0, interpolation=cv.INTER_LINEAR, **params):
+        height, width = img.shape[:2]
+        new_height, new_width = int(height * scale), int(width * scale)
+        if new_height <= 0 or new_width <= 0:
+            return img
+        return super().apply(img, scale, interpolation, **params)
+
+
 @dataclass
 class IAMImageTransforms:
     """Image transforms for the IAM dataset.
@@ -95,7 +106,7 @@ class IAMImageTransforms:
             self.train_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.RandomScale(scale_limit=random_scale_limit, p=0.5),
+                    SafeRandomScale(scale_limit=random_scale_limit, p=0.5),
                     A.SafeRotate(
                         limit=random_rotate_limit,
                         border_mode=cv.BORDER_CONSTANT,
@@ -116,7 +127,7 @@ class IAMImageTransforms:
             self.train_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.RandomScale(scale_limit=random_scale_limit, p=0.5),
+                    SafeRandomScale(scale_limit=random_scale_limit, p=0.5),
                     A.SafeRotate(
                         limit=random_rotate_limit,
                         border_mode=cv.BORDER_CONSTANT,
@@ -137,7 +148,7 @@ class IAMImageTransforms:
             self.train_trnsf = A.Compose(
                 [
                     A.Lambda(partial(dpi_adjusting, scale=scale)),
-                    A.RandomScale(scale_limit=random_scale_limit, p=0.5),
+                    SafeRandomScale(scale_limit=random_scale_limit, p=0.5),
                     # SafeRotate is preferred over Rotate because it does not cut off
                     # text when it extends out of the frame after rotation.
                     A.SafeRotate(
