@@ -59,9 +59,8 @@ class LogWorstPredictions(Callback):
                 logits, preds, _ = pl_module(img.to(device), target.to(device))
                 for prd, tgt, im in zip(preds, target, img):
                     cer_metric.reset()
-                    cer = cer_metric(prd.unsqueeze(0), tgt.unsqueeze(0))
+                    cer = cer_metric(prd.unsqueeze(0), tgt.unsqueeze(0)).item()
                     img_cers.append((im, cer, prd, tgt))
-            break
 
         # Log the worst k predictions.
         img_cers.sort(key=lambda x: x[1], reverse=True)  # sort by CER
