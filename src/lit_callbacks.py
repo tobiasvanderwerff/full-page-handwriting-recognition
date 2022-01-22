@@ -12,6 +12,13 @@ from torch.utils.data import DataLoader
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint
 
 
+PREDICTIONS_TO_LOG = {
+    "word": 10,
+    "line": 6,
+    "form": 1,
+}
+
+
 class LogWorstPredictions(Callback):
     """
     At the end of training, log the worst image prediction, meaning the predictions
@@ -23,12 +30,10 @@ class LogWorstPredictions(Callback):
         val_dataloader: DataLoader,
         val_only: bool = False,
         data_format: str = "word",
-        worst_k: int = 10,
     ):
         self.val_dataloader = val_dataloader
         self.val_only = val_only
         self.data_format = data_format
-        self.worst_k = worst_k
 
     def on_validation_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"):
         if self.val_only:
@@ -63,17 +68,18 @@ class LogWorstPredictions(Callback):
                     img_cers.append((im, cer, prd, tgt))
 
         # Log the worst k predictions.
+        to_log = PREDICTIONS_TO_LOG[self.data_format] * 2
         img_cers.sort(key=lambda x: x[1], reverse=True)  # sort by CER
-        img_cers = img_cers[: self.worst_k]
-        fig = plt.figure(figsize=(12, 16))
+        img_cers = img_cers[:to_log]
+        fig = plt.figure(figsize=(24, 16))
         for i, (im, cer, prd, tgt) in enumerate(img_cers):
             pred_str, target_str = decode_prediction_and_target(
                 prd, tgt, pl_module.model.label_encoder, pl_module.decoder.eos_tkn_idx
             )
 
             # Create plot.
-            ncols = 2 if self.data_format == "word" else 1
-            nrows = math.ceil(self.worst_k / ncols)
+            ncols = 4 if self.data_format == "word" else 2
+            nrows = math.ceil(to_log / ncols)
             ax = fig.add_subplot(nrows, ncols, i + 1, xticks=[], yticks=[])
             matplotlib_imshow(im, IAMDataset.MEAN, IAMDataset.STD)
             ax.set_title(f"Pred: {pred_str} (CER: {cer:.2f})\nTarget: {target_str}")
@@ -82,6 +88,8 @@ class LogWorstPredictions(Callback):
         tensorboard = trainer.logger.experiment
         tensorboard.add_figure(f"val: worst predictions", fig, trainer.global_step)
         plt.close(fig)
+
+        print("Done.")
 
     @staticmethod
     def _load_best_model(trainer: "pl.Trainer", pl_module: "pl.LightningModule"):

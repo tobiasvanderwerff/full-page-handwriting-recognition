@@ -8,7 +8,7 @@ from pathlib import Path
 from functools import partial
 
 from lit_models import LitFullPageHTREncoderDecoder
-from lit_callbacks import LogModelPredictions, LogWorstPredictions
+from lit_callbacks import LogModelPredictions, LogWorstPredictions, PREDICTIONS_TO_LOG
 from data import IAMDataset, IAMDatasetSynthetic, IAMSyntheticDataGenerator
 from util import LitProgressBar, LabelEncoder
 
@@ -20,11 +20,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, ModelSum
 from pytorch_lightning.plugins import DDPPlugin
 
 LOGGING_DIR = "lightning_logs/"
-PREDICTIONS_TO_LOG = {
-    "word": 8,
-    "line": 6,
-    "form": 1,
-}
 
 
 def main(args):
