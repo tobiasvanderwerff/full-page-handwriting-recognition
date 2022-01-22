@@ -2,8 +2,7 @@ torch>=1.10
 torchvision
 pytorch-lightning>=1.5.1
 editdistance
-torchmetrics
-
+torchmetrics>=0.7.0
 pandas
 opencv-python
 albumentations

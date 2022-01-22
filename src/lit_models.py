@@ -97,20 +97,8 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         # Update and log metrics.
         self.model.cer_metric(preds, targets)
         self.model.wer_metric(preds, targets)
-        self.log(
-            "char_error_rate",
-            self.model.cer_metric,
-            prog_bar=True,
-            on_step=False,
-            on_epoch=True,
-        )
-        self.log(
-            "word_error_rate",
-            self.model.wer_metric,
-            prog_bar=True,
-            on_step=False,
-            on_epoch=True,
-        )
+        self.log("char_error_rate", self.model.cer_metric, prog_bar=True)
+        self.log("word_error_rate", self.model.wer_metric, prog_bar=True)
         self.log("val_loss", loss, sync_dist=True, prog_bar=True)
 
         return loss
