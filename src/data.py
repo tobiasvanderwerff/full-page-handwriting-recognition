@@ -19,7 +19,7 @@ from transforms import IAMImageTransforms
 
 class IAMDataset(Dataset):
     MEAN = 0.8275
-    VAR = 0.2314
+    STD = 0.2314
     MAX_FORM_HEIGHT = 3542
     MAX_FORM_WIDTH = 2479
 
@@ -176,7 +176,7 @@ class IAMDataset(Dataset):
         else:  # word or line
             max_img_h = self.MAX_FORM_HEIGHT
         transforms = IAMImageTransforms(
-            (max_img_h, max_img_w), self.parse_method, (IAMDataset.MEAN, IAMDataset.VAR)
+            (max_img_h, max_img_w), self.parse_method, (IAMDataset.MEAN, IAMDataset.STD)
         )
 
         if split == "train":

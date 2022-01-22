@@ -8,7 +8,7 @@ from pathlib import Path
 from functools import partial
 
 from lit_models import LitFullPageHTREncoderDecoder
-from lit_callbacks import LogModelPredictions
+from lit_callbacks import LogModelPredictions, LogWorstPredictions
 from data import IAMDataset, IAMDatasetSynthetic, IAMSyntheticDataGenerator
 from util import LitProgressBar, LabelEncoder
 
@@ -189,13 +189,16 @@ def main(args):
         )
 
     callbacks = [
-        ModelSummary(max_depth=2),
-        LitProgressBar(),
         ModelCheckpoint(
             save_top_k=(-1 if args.save_all_checkpoints else 3),
             mode="min",
             monitor="word_error_rate",
             filename="{epoch}-{char_error_rate:.4f}-{word_error_rate:.4f}",
+        ),
+        ModelSummary(max_depth=2),
+        LitProgressBar(),
+        LogWorstPredictions(
+            dl_val, val_only=(args.validate is not None), data_format=args.data_format
         ),
         LogModelPredictions(
             ds.label_enc,

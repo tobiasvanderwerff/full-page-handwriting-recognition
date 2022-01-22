@@ -72,9 +72,6 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
             label_smoothing=label_smoothing,
         )
 
-        self.all_logits = None
-        self.all_targets = None
-
     @property
     def encoder(self):
         return self.model.encoder
@@ -112,11 +109,6 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
 
         return loss
         # return {"logits": logits, "targets": targets}
-
-    # def validation_epoch_end(self, validation_step_outputs):
-    #     """Aggregate logits and targets, for the purpose of later callback logic."""
-    #     self.all_logits = torch.cat(validation_step_outputs["logits"], 0)
-    #     self.all_targets = torch.cat(validation_step_outputs["targets"], 0)
 
     def configure_optimizers(self):
         return optim.Adam(self.parameters(), lr=self.learning_rate)

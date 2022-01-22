@@ -2,12 +2,12 @@ import xml.etree.ElementTree as ET
 import random
 import pickle
 from pathlib import Path
-from typing import Union, Any, List, Optional, Sequence, Dict
-from dataclasses import dataclass, field
+from typing import Union, Any, List, Optional, Sequence, Dict, Tuple
 
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+from torch import Tensor
 from pytorch_lightning.callbacks import TQDMProgressBar
 
 
@@ -43,11 +43,13 @@ def find_child_by_tag(
     return None
 
 
-def matplotlib_imshow(img: torch.Tensor, one_channel=True):
+def matplotlib_imshow(
+    img: torch.Tensor, mean: float = 0.5, std: float = 0.5, one_channel=True
+):
     assert img.device.type == "cpu"
     if one_channel and img.ndim == 3:
         img = img.mean(dim=0)
-    img = img / 2 + 0.5  # unnormalize
+    img = img * std + mean  # unnormalize
     npimg = img.numpy()
     if one_channel:
         plt.imshow(npimg, cmap="Greys")
@@ -144,3 +146,20 @@ class LitProgressBar(TQDMProgressBar):
                 items.pop(k, None)
         items.pop("v_num", None)
         return items
+
+
+def decode_prediction_and_target(
+    pred: Tensor, target: Tensor, label_encoder: LabelEncoder, eos_tkn_idx: int
+) -> Tuple[str, str]:
+    # Find padding and <EOS> positions in predictions and targets.
+    eos_idx_pred = (pred == eos_tkn_idx).float().argmax().item()
+    eos_idx_tgt = (target == eos_tkn_idx).float().argmax().item()
+
+    # Decode prediction and target.
+    p, t = pred.tolist(), target.tolist()
+    p = p[1:]  # skip the initial <SOS> token, which is added by default
+    p = p[:eos_idx_pred] if eos_idx_pred != 0 else p
+    t = t[:eos_idx_tgt] if eos_idx_tgt != 0 else t
+    pred_str = "".join(label_encoder.inverse_transform(p))
+    target_str = "".join(label_encoder.inverse_transform(t))
+    return pred_str, target_str
