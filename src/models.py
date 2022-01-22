@@ -420,6 +420,8 @@ class FullPageHTREncoderDecoder(nn.Module):
         return logits, loss
 
     def calculate_metrics(self, preds: Tensor, targets: Tensor) -> Dict[str, float]:
+        self.cer_metric.reset()
+        self.wer_metric.reset()
         cer = self.cer_metric(preds, targets)
         wer = self.wer_metric(preds, targets)
         return {"char_error_rate": cer, "word_error_rate": wer}

@@ -91,24 +91,29 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         imgs, targets = batch
-
-        # Forward pass.
         logits, _, loss = self(imgs, targets)
         _, preds = logits.max(-1)
 
-        # Calculate metrics.
-        metrics = self.model.calculate_metrics(preds, targets)
-
-        # Log metrics and loss.
-        self.log("char_error_rate", metrics["char_error_rate"], prog_bar=True)
-        self.log("word_error_rate", metrics["word_error_rate"], prog_bar=True)
+        # Update and log metrics.
+        self.model.cer_metric(preds, targets)
+        self.model.wer_metric(preds, targets)
+        self.log(
+            "char_error_rate",
+            self.model.cer_metric,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.log(
+            "word_error_rate",
+            self.model.wer_metric,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+        )
         self.log("val_loss", loss, sync_dist=True, prog_bar=True)
-        # `hp_metric` will show up in the Tensorboard hparams tab, used for comparing
-        # different models.
-        self.log("hp_metric", metrics["char_error_rate"])
 
         return loss
-        # return {"logits": logits, "targets": targets}
 
     def configure_optimizers(self):
         return optim.Adam(self.parameters(), lr=self.learning_rate)
