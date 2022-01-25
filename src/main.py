@@ -38,7 +38,7 @@ def main(args):
         if args.validate:
             model_path = Path(args.validate)
         elif args.test:
-            model_path = Path(args.validate)
+            model_path = Path(args.test)
         else:
             model_path = Path(args.load_model)
         le_path_1 = model_path.parent.parent / "label_encoding.txt"
