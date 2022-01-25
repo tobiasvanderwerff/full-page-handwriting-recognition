@@ -27,37 +27,58 @@ class LogWorstPredictions(Callback):
 
     def __init__(
         self,
-        val_dataloader: DataLoader,
-        val_only: bool = False,
+        train_dataloader: Optional[DataLoader] = None,
+        val_dataloader: Optional[DataLoader] = None,
+        test_dataloader: Optional[DataLoader] = None,
+        training_skipped: bool = False,
         data_format: str = "word",
     ):
+        self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
-        self.val_only = val_only
+        self.test_dataloader = test_dataloader
+        self.training_skipped = training_skipped
         self.data_format = data_format
 
     def on_validation_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"):
-        if self.val_only:
-            # This is to make sure the callback is called when model training
-            # is skipped.
-            self.log_worst_predictions(trainer, pl_module)
+        if self.training_skipped and self.val_dataloader is not None:
+            self.log_worst_predictions(
+                self.val_dataloader, trainer, pl_module, mode="val"
+            )
+
+    def on_test_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"):
+        if self.test_dataloader is not None:
+            self.log_worst_predictions(
+                self.test_dataloader, trainer, pl_module, mode="test"
+            )
 
     def on_fit_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"):
-        self.log_worst_predictions(trainer, pl_module)
+        if self.train_dataloader is not None:
+            self.log_worst_predictions(
+                self.train_dataloader, trainer, pl_module, mode="train"
+            )
+        if self.val_dataloader is not None:
+            self.log_worst_predictions(
+                self.val_dataloader, trainer, pl_module, mode="val"
+            )
 
     def log_worst_predictions(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
+        self,
+        dataloader: DataLoader,
+        trainer: "pl.Trainer",
+        pl_module: "pl.LightningModule",
+        mode: str = "train",
     ):
         img_cers = []
         device = "cuda:0" if pl_module.on_gpu else "cpu"
-        if not self.val_only:
+        if not self.training_skipped:
             self._load_best_model(trainer, pl_module)
             pl_module = trainer.model
 
-        print("Running validation inference on best model...")
+        print(f"Running {mode} inference on best model...")
 
         # Run inference on the validation set.
         pl_module.eval()
-        for img, target in self.val_dataloader:
+        for img, target in dataloader:
             assert target.ndim == 2, target.ndim
             cer_metric = pl_module.model.cer_metric
             with torch.inference_mode():
@@ -86,7 +107,7 @@ class LogWorstPredictions(Callback):
 
         # Log the results to Tensorboard.
         tensorboard = trainer.logger.experiment
-        tensorboard.add_figure(f"val: worst predictions", fig, trainer.global_step)
+        tensorboard.add_figure(f"{mode}: worst predictions", fig, trainer.global_step)
         plt.close(fig)
 
         print("Done.")

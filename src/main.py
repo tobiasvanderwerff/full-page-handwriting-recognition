@@ -33,9 +33,14 @@ def main(args):
 
     label_enc = None
     n_classes_saved = None
-    if args.validate or args.load_model:
+    if args.validate or args.test or args.load_model:
         # Load the label encoder for the trained model.
-        model_path = Path(args.validate) if args.validate else Path(args.load_model)
+        if args.validate:
+            model_path = Path(args.validate)
+        elif args.test:
+            model_path = Path(args.validate)
+        else:
+            model_path = Path(args.load_model)
         le_path_1 = model_path.parent.parent / "label_encoding.txt"
         le_path_2 = model_path.parent.parent / "label_encoder.pkl"
         assert le_path_1.is_file() or le_path_2.is_file(), (
@@ -138,9 +143,16 @@ def main(args):
         num_workers=args.num_workers,
         pin_memory=True,
     )
+    dl_test = DataLoader(
+        ds_test,
+        batch_size=2 * args.batch_size,
+        shuffle=False,
+        collate_fn=collate_fn,
+        num_workers=args.num_workers,
+        pin_memory=True,
+    )
 
-    if args.validate or args.load_model:
-        model_path = Path(args.validate) if args.validate else Path(args.load_model)
+    if args.validate or args.test or args.load_model:
         assert Path(model_path).is_file(), f"{model_path} does not point to a file."
         # Load the model. Note that the vocab length and special tokens given below
         # are derived from the saved label encoder associated with the checkpoint.
@@ -193,7 +205,11 @@ def main(args):
         ModelSummary(max_depth=2),
         LitProgressBar(),
         LogWorstPredictions(
-            dl_val, val_only=(args.validate is not None), data_format=args.data_format
+            dl_train,
+            dl_val,
+            dl_test,
+            training_skipped=(args.validate is not None or args.test is not None),
+            data_format=args.data_format,
         ),
         LogModelPredictions(
             ds.label_enc,
@@ -259,6 +275,8 @@ def main(args):
 
     if args.validate:  # validate a trained model
         trainer.validate(model, dl_val)
+    elif args.test:  # test a trained model
+        trainer.test(model, dl_test)
     else:  # train a model
         trainer.fit(model, dl_train, dl_val)
 
@@ -282,6 +300,8 @@ if __name__ == "__main__":
     parser.add_argument("--validate", type=str, default=None,
                         help="Validate a trained model, specified by its checkpoint "
                              "path.")
+    parser.add_argument("--test", type=str, default=None,
+                        help="Test a trained model, specified by its checkpoint path.")
     parser.add_argument("--use_aachen_splits", action="store_true", default=False)
     parser.add_argument("--use_lowercase", action="store_true", default=False,
                         help="Convert all target label sequences to lowercase.")
