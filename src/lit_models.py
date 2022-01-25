@@ -90,6 +90,12 @@ class LitFullPageHTREncoderDecoder(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        return self.val_or_test_step(batch)
+
+    def test_step(self, batch, batch_idx):
+        return self.val_or_test_step(batch)
+
+    def val_or_test_step(self, batch) -> Tensor:
         imgs, targets = batch
         logits, _, loss = self(imgs, targets)
         _, preds = logits.max(-1)
