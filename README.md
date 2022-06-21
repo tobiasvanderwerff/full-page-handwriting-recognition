@@ -9,7 +9,7 @@ pages. Even though I succesfully managed to train models for word and line image
 training on full-page images always leads to overfitting in all configurations I tried
 thus far. I have followed the implementation details from the paper as closely as
 possible (including the synthetic data augmentation scheme to create additional data,
-explained [below](user-content-synthetic-data-augmentation)),
+explained [below](#synthetic-data-augmentation)),
 but no configuration has lead to a word error rate below 95% on the validation set. I
 might try doing some more hyperparameter tuning in the future to try and improve
 performance, but nothing has shown promise so far._
