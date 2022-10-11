@@ -8,9 +8,11 @@ import numpy as np
 import cv2 as cv
 import pandas as pd
 
+
 from lit_models import LitFullPageHTREncoderDecoder
 from transforms import IAMImageTransforms
 from util import LabelEncoder
+from data import IAMDataset
 
 
 IMG_SCALES_GRID_SEARCH = [0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
@@ -95,7 +97,9 @@ def prepare_data(
             trnsf = IAMImageTransforms(img.shape, data_format, scale=scale).test_trnsf
             imgs.append(torch.from_numpy(trnsf(image=img)["image"]))
     else:
-        trnsf = IAMImageTransforms(img.shape, data_format).test_trnsf
+        trnsf = IAMImageTransforms(
+            img.shape, data_format, (IAMDataset.MEAN, IAMDataset.STD)
+        ).test_trnsf
         imgs = torch.from_numpy(trnsf(image=img)["image"])
 
     return imgs, label_enc
